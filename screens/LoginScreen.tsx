@@ -137,9 +137,8 @@ async function handlesBiometricLogin()  {
     alert('Biometric Authentication is not available on this device');
     return
   }
-}
 
-const result = await LocalAuthentication.authenticateAsync ({
+  const result = await LocalAuthentication.authenticateAsync ({
   promptMessage: 'Sign in to Narrows',
   fallbackLabel: 'Use password',
 });
@@ -149,9 +148,7 @@ if (result.success) {
   //replace with real auth later
 
 }
-
-
-
+}
 
 const styles = StyleSheet.create({
   flex: {
