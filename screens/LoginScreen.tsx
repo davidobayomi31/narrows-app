@@ -51,7 +51,7 @@ export default function LoginScreen() {
         keyboardShouldScrollToFocusedInput={true}
       >
         <Image
-          source={require('../assets/narrows-logo-transparent.png')}
+          source={require('../assets/narrows-logo-clear.png')}
           style={styles.logo}
         />
 
@@ -84,7 +84,7 @@ export default function LoginScreen() {
             style={styles.eyeButton}
             onPress={() => setShowPassword(!showPassword)}
           >
-            <Text style={styles.eyeText}>{showPassword ? '🙈' : '👁️'}</Text>
+            <Text style={styles.eyeText}>{showPassword ? '🔓' : '⚓'}</Text>
           </TouchableOpacity>
         </View>
         {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
