@@ -13,15 +13,22 @@ import { useState } from 'react';
 import { Colors } from '../constants/colors';
 
 export default function LoginScreen() {
+  // tracks what the user types in each field
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+
+  // controls whether password characters are visible
   const [showPassword, setShowPassword] = useState(false);
+
+  // holds error messages shown below each input
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
 
+  // checks email and password before allowing login
   function validateAndLogin() {
     let valid = true;
 
+    // email must contain @ symbol
     if (!email.includes('@')) {
       setEmailError('Please enter a valid email address');
       valid = false;
@@ -29,6 +36,7 @@ export default function LoginScreen() {
       setEmailError('');
     }
 
+    // password must be at least 6 characters
     if (password.length < 6) {
       setPasswordError('Password must be at least 6 characters');
       valid = false;
@@ -36,16 +44,19 @@ export default function LoginScreen() {
       setPasswordError('');
     }
 
+    // real auth logic goes here once backend is connected
     if (valid) {
       console.log('Login pressed');
     }
   }
 
   return (
+    // pushes content up when keyboard appears so inputs stay visible
     <KeyboardAvoidingView
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
+      {/* allows the screen to scroll if content overflows */}
       <ScrollView
         contentContainerStyle={styles.container}
         keyboardShouldScrollToFocusedInput={true}
@@ -80,6 +91,7 @@ export default function LoginScreen() {
             value={password}
             onChangeText={setPassword}
           />
+          {/* anchor = locked, unlocked = password visible */}
           <TouchableOpacity
             style={styles.eyeButton}
             onPress={() => setShowPassword(!showPassword)}
@@ -111,6 +123,7 @@ export default function LoginScreen() {
           <Text style={styles.googleButtonText}>Continue with Google</Text>
         </TouchableOpacity>
 
+        {/* navigates to signup screen — navigation to be wired up later */}
         <TouchableOpacity style={styles.signupRow}>
           <Text style={styles.signupText}>
             Don't have an account?{' '}
