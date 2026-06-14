@@ -1,16 +1,8 @@
-import {
-  View,
-  Text,
-  StyleSheet,
-  Image,
-  TouchableOpacity,
-  TextInput,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-} from 'react-native';
+import {View, Text, StyleSheet, Image,TouchableOpacity,
+  TextInput, KeyboardAvoidingView, Platform, ScrollView, } from 'react-native';
 import { useState } from 'react';
 import { Colors } from '../constants/colors';
+import * as LocalAuthentication from 'expo-local-authentication';
 
 export default function LoginScreen() {
   // tracks what the user types in each field
@@ -59,7 +51,7 @@ export default function LoginScreen() {
       {/* allows the screen to scroll if content overflows */}
       <ScrollView
         contentContainerStyle={styles.container}
-        keyboardShouldScrollToFocusedInput={true}
+        
       >
         <Image
           source={require('../assets/narrows-logo-clear.png')}
@@ -135,6 +127,31 @@ export default function LoginScreen() {
     </KeyboardAvoidingView>
   );
 }
+
+//face id / touch id /fingerprint
+async function handlesBiometricLogin()  {
+  const hasHardware = await LocalAuthentication.hasHardwareAsync();
+  const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+
+  if (!hasHardware || !isEnrolled){
+    alert('Biometric Authentication is not available on this device');
+    return
+  }
+}
+
+const result = await LocalAuthentication.authenticateAsync ({
+  promptMessage: 'Sign in to Narrows',
+  fallbackLabel: 'Use password',
+});
+
+if (result.success) {
+  console.log('Biometric Login successful');
+  //replace with real auth later
+
+}
+
+
+
 
 const styles = StyleSheet.create({
   flex: {

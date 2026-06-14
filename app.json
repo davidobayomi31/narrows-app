@@ -13,6 +13,9 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Narrows uses Face ID to sign you in quickly and securely."
+      },
       "supportsTablet": true
     },
     "android": {
