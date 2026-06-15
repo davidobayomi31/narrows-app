@@ -7,7 +7,8 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,SafeAreaView,
+  ScrollView,
+  SafeAreaView,
 } from 'react-native';
 import { useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
@@ -83,7 +84,7 @@ export default function SignupScreen() {
         />
 
         <Text style={styles.title}>Create Account</Text>
-        <Text style={styles.tagline}>Join the Narrows community</Text>
+        <Text style={styles.tagline}>Join our Narrows community</Text>
 
         <View style={styles.divider} />
 
