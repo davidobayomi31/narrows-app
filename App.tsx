@@ -1,6 +1,7 @@
 import {NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 
+import MainTabs from './screens/navigation/MainTabs';
 import LoginScreen from './screens/LoginScreen';
 import SplashScreen from './screens/SplashScreen';
 import Homepage from './screens/Homepage';
@@ -19,7 +20,7 @@ export default function App(){
         <Stack.Screen name='Splash' component={SplashScreen} />
         <Stack.Screen name='Login' component={LoginScreen} />
         <Stack.Screen name='Signup' component={SignupScreen} />
-        <Stack.Screen name='Home' component={Homepage} />
+        <Stack.Screen name='Home' component={MainTabs} />
         <Stack.Screen name='Onboarding' component={OnboardingScreen} />
       </Stack.Navigator>
     </NavigationContainer>
