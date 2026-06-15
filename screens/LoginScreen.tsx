@@ -1,5 +1,5 @@
 import {View, Text, StyleSheet, Image,TouchableOpacity,
-  TextInput, KeyboardAvoidingView, Platform, ScrollView, } from 'react-native';
+  TextInput, KeyboardAvoidingView, Platform, ScrollView, SafeAreaView } from 'react-native';
 import { useState } from 'react';
 import { Colors } from '../constants/colors';
 import * as LocalAuthentication from 'expo-local-authentication';
@@ -46,6 +46,7 @@ export default function LoginScreen() {
 
   return (
     // pushes content up when keyboard appears so inputs stay visible
+    <SafeAreaView style={styles.safeArea}>
     <KeyboardAvoidingView
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -129,6 +130,7 @@ export default function LoginScreen() {
 
       </ScrollView>
     </KeyboardAvoidingView>
+   </SafeAreaView>
   );
 }
 
@@ -303,4 +305,8 @@ appleButtonText: {
     color: Colors.gold,
     fontWeight: '600',
   },
+  safeArea: {
+  flex: 1,
+  backgroundColor: Colors.background,
+},
 });

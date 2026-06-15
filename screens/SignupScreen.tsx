@@ -7,7 +7,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
+  ScrollView,SafeAreaView,
 } from 'react-native';
 import { useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
@@ -71,6 +71,7 @@ export default function SignupScreen() {
   }
 
   return (
+    <SafeAreaView style={styles.safeArea}>
     <KeyboardAvoidingView
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -158,6 +159,7 @@ export default function SignupScreen() {
 
       </ScrollView>
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
@@ -259,4 +261,8 @@ const styles = StyleSheet.create({
     color: Colors.gold,
     fontWeight: '600',
   },
+  safeArea: {
+  flex: 1,
+  backgroundColor: Colors.background,
+},
 });
