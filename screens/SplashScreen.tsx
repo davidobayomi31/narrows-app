@@ -5,7 +5,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import {Colors} from '../constants/colors';
 
 export default function SplashScreen(){
-    const navigation = useNavigation();
+    const navigation = useNavigation<any>();
 
     useEffect(() => {
         checkLoginStatus();
