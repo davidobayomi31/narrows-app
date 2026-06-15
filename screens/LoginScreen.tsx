@@ -3,11 +3,13 @@ import {View, Text, StyleSheet, Image,TouchableOpacity,
 import { useState } from 'react';
 import { Colors } from '../constants/colors';
 import * as LocalAuthentication from 'expo-local-authentication';
+import { useNavigation } from '@react-navigation/native';
 
 export default function LoginScreen() {
   // tracks what the user types in each field
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const navigation = useNavigation<any>();
 
   // controls whether password characters are visible
   const [showPassword, setShowPassword] = useState(false);
@@ -116,7 +118,9 @@ export default function LoginScreen() {
         </TouchableOpacity>
 
         {/* navigates to signup screen — navigation to be wired up later */}
-        <TouchableOpacity style={styles.signupRow}>
+        <TouchableOpacity 
+        style={styles.signupRow}
+        onPress={() => navigation.navigate('Signup')} >
           <Text style={styles.signupText}>
             Don't have an account?{' '}
             <Text style={styles.signupLink}>Sign up</Text>
