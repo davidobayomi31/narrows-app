@@ -1,24 +1,227 @@
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
+import { useState } from 'react';
+
+const STATS = [
+  { label: 'Trips', value: '12' },
+  { label: 'Catches', value: '34' },
+  { label: 'Km', value: '287' },
+  { label: 'Hours', value: '41' },
+];
+
+const LOG_TYPES = ['Trip', 'Catch', 'Check-in'];
+const CONDITIONS = ['GREAT', 'MIXED', 'ROUGH'];
+
+const CONDITION_COLORS: Record<string, string> = {
+  GREAT: '#166534',
+  MIXED: '#92400E',
+  ROUGH: '#7F1D1D',
+};
 
 export default function ProfileScreen() {
+  const [activeLog, setActiveLog] = useState('Trip');
+  const [activeCondition, setActiveCondition] = useState('GREAT');
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.text}>Profile</Text>
-    </View>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+
+        {/* User header */}
+        <View style={styles.profileHeader}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>D</Text>
+          </View>
+          <Text style={styles.profileName}>David</Text>
+          <Text style={styles.profileSub}>Simcoe County · Boat Owner</Text>
+        </View>
+
+        {/* Stats row */}
+        <View style={styles.statsRow}>
+          {STATS.map((stat) => (
+            <View key={stat.label} style={styles.statCell}>
+              <Text style={styles.statValue}>{stat.value}</Text>
+              <Text style={styles.statLabel}>{stat.label}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Log activity */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>What are you logging?</Text>
+          <View style={styles.logRow}>
+            {LOG_TYPES.map((type) => (
+              <TouchableOpacity
+                key={type}
+                style={[styles.logTab, activeLog === type && styles.logTabActive]}
+                onPress={() => setActiveLog(type)}
+              >
+                <Text style={[styles.logText, activeLog === type && styles.logTextActive]}>
+                  {type}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Conditions */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>How were the conditions?</Text>
+          <View style={styles.conditionRow}>
+            {CONDITIONS.map((cond) => (
+              <TouchableOpacity
+                key={cond}
+                style={[
+                  styles.conditionTab,
+                  activeCondition === cond && { backgroundColor: CONDITION_COLORS[cond], borderColor: CONDITION_COLORS[cond] },
+                ]}
+                onPress={() => setActiveCondition(cond)}
+              >
+                <Text style={[styles.conditionText, activeCondition === cond && styles.conditionTextActive]}>
+                  {cond}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Post button */}
+        <TouchableOpacity style={styles.postButton}>
+          <Text style={styles.postButtonText}>Post to Dock Feed</Text>
+        </TouchableOpacity>
+
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 48,
+  },
+  profileHeader: {
+    alignItems: 'center',
+    paddingVertical: 24,
+  },
+  avatar: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#2E4057',
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 12,
   },
-  text: {
+  avatarText: {
     color: Colors.cream,
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
+  },
+  profileName: {
+    color: Colors.cream,
+    fontSize: 22,
+    fontWeight: 'bold',
+  },
+  profileSub: {
+    color: '#8899AA',
+    fontSize: 13,
+    marginTop: 4,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    backgroundColor: '#0F0F0F',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#1E1E1E',
+    marginBottom: 16,
+  },
+  statCell: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 16,
+  },
+  statValue: {
+    color: Colors.gold,
+    fontSize: 22,
+    fontWeight: 'bold',
+  },
+  statLabel: {
+    color: '#8899AA',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  card: {
+    backgroundColor: '#0F0F0F',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#1E1E1E',
+  },
+  cardTitle: {
+    color: Colors.cream,
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 14,
+  },
+  logRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  logTab: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#2E4057',
+    alignItems: 'center',
+  },
+  logTabActive: {
+    backgroundColor: Colors.gold,
+    borderColor: Colors.gold,
+  },
+  logText: {
+    color: '#8899AA',
+    fontSize: 13,
+  },
+  logTextActive: {
+    color: Colors.black,
+    fontWeight: '700',
+  },
+  conditionRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  conditionTab: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#2E4057',
+    alignItems: 'center',
+  },
+  conditionText: {
+    color: '#8899AA',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  conditionTextActive: {
+    color: Colors.white,
+  },
+  postButton: {
+    backgroundColor: Colors.gold,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+  },
+  postButtonText: {
+    color: Colors.black,
+    fontSize: 16,
+    fontWeight: '700',
   },
 });

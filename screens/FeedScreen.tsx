@@ -6,58 +6,37 @@ import {Colors} from '../constants/colors';
 
 const FILTER = ['All', 'Trips', 'Catches','Check-ins']
 
-//Decide late if i want to leave this or let posts fill up by its self(have to use data basse)
+//Decide later if i want to leave this or let posts fill up by itself (have to use database)
 const POST = [
   {
     id:'1',
     initial: 'M',
-    //initial is for "profle picture, later let users acutally add prifle picture"
+    //initial is for "profile picture, later let users actually add profile picture"
     name: 'Mike Tanner',
-    time:'2hs ago',
+    time:'2h ago',
     location: 'Orillia, ON',
-    type: 'Trip',
-    text: 'Great run up to Sparrow Lake today. Calm waters all the way through the Narrows'
+    type: 'TRIP',
+    text: 'Great run up to Sparrow Lake today. Calm waters all the way through the Narrows',
     //later change 'text' to 'caption'
-},
-{
-  id: '2',
-  initial: 'S',
-  name: 'Sarah K',
-  time: '5h ago',
-  locaiton: 'Barrie, ON',
-  type:'Catch',
-  text: 'Landed a 4lb bass off the dock at Big Bay Point. Water temp was perfect.',
-},
-{
-  id: '3',
-  initial: 'R',
-  name: 'Rob Deleany',
-  time: '1 Day ago',
-  locaiton: 'Rama, ON',
-  type:'Trip',
-  text: 'Had an asome trip on the Narrows, got discount gas at Blue Beacon Marina',
-  
-},
-{
-  id: '',
-  initial: '',
-  name: '',
-  time: '',
-  locaiton: '',
-  type:'',
-  text: '',
-  
-},
-{
-  id: '',
-  initial: '',
-  name: '',
-  time: '',
-  locaiton: '',
-  type:'',
-  text: '',
-  
-},
+  },
+  {
+    id: '2',
+    initial: 'S',
+    name: 'Sarah K',
+    time: '5h ago',
+    location: 'Barrie, ON',
+    type: 'CATCH',
+    text: 'Landed a 4lb bass off the dock at Big Bay Point. Water temp was perfect.',
+  },
+  {
+    id: '3',
+    initial: 'R',
+    name: 'Rob Deleany',
+    time: '1 Day ago',
+    location: 'Rama, ON',
+    type: 'TRIP',
+    text: 'Had an awesome trip on the Narrows, got discount gas at Blue Beacon Marina',
+  },
 ];
 
 const BADGE_COLORS: Record<string, string> = {
@@ -67,36 +46,39 @@ const BADGE_COLORS: Record<string, string> = {
 };
 
 export default function FeedScreen () {
-  const [activeFilter, setActiveFilter] = useState ('ALL');
-  
+  const [activeFilter, setActiveFilter] = useState ('All');
+
   return (
     <SafeAreaView style = {styles.safeArea}>
-      {/* filter tab */}
+      {/* filter tabs */}
       <View style = {styles.filterRow}>
         {FILTER.map((f) => (
           <TouchableOpacity
             key = {f}
-            style = {[styles.filterTab, activeFilter === f && styles.filterActiveTab]}
+            style = {[styles.filterTab, activeFilter === f && styles.filterTabActive]}
             onPress = {() => setActiveFilter (f)}
             >
-              <Text style ={[styles.filterText, activeFilter == f && styles.filterActiveText]}>
+              <Text style ={[styles.filterText, activeFilter === f && styles.filterTextActive]}>
                 {f}
               </Text>
           </TouchableOpacity>
         ))}
-
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {POST.map((post) => (
           <View key={post.id} style={styles.card}>
-            {/* Ttop row: avatar + name/time + badge */}
-            <View  style = {styles.cardHeader}>
+            {/* Top row: avatar + name/time + badge */}
+            <View style={styles.cardHeader}>
               <View style={styles.avatar}>
                 <Text style={styles.avatarText}>{post.initial}</Text>
               </View>
-              <View style={[styles.badge, {backgroundColor: BADGE_COLORS[post.tpye] }]}>
-                <text style={styles.badgeText}>{post.type}</text>
+              <View style={styles.cardMeta}>
+                <Text style={styles.cardName}>{post.name}</Text>
+                <Text style={styles.cardSub}>{post.time} · {post.location}</Text>
+              </View>
+              <View style={[styles.badge, {backgroundColor: BADGE_COLORS[post.type]}]}>
+                <Text style={styles.badgeText}>{post.type}</Text>
               </View>
             </View>
             {/* Post text */}
@@ -107,8 +89,7 @@ export default function FeedScreen () {
               <Text style={styles.anchorText}>⚓</Text>
             </TouchableOpacity>
           </View>
-        ) )}
-
+        ))}
       </ScrollView>
     </SafeAreaView>
   );
