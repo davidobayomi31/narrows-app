@@ -13,6 +13,8 @@ import {
 import { useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
+import { supabase } from '../lib/supabase';
+
 
 export default function SignupScreen() {
   const navigation = useNavigation<any>();
