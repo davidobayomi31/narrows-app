@@ -34,7 +34,7 @@ export default function SignupScreen() {
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
 
   // validates all fields before creating account
-  function validateAndSignup() {
+  async function validateAndSignup() {
     let valid = true;
 
     if (fullName.trim().length < 2) {
@@ -67,9 +67,17 @@ export default function SignupScreen() {
     }
 
     if (valid) {
-      console.log('Signup pressed');
-      // navigate to onboarding after successful signup
-      navigation.navigate('Onboarding');
+        const { error } = await supabase.auth.signUp({
+            email,
+            password, 
+        });
+        if(error) {
+            alert(error.message);
+        } else {
+            // navigate to onboarding after successful signup
+            navigation.navigate('Onboarding');
+        }
+      
     }
   }
 
