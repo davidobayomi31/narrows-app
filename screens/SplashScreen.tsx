@@ -16,7 +16,7 @@ export default function SplashScreen(){
         await new Promise(resolve => setTimeout(resolve, 2000));
 
         //check if use is still logged in - placeholder for now
-        const isLoggedIn = false;
+        const isLoggedIn = true; //change to false when done
         const hasCredentials = false;
 
         if (isLoggedIn){
