@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Colors } from '../constants/colors';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useNavigation } from '@react-navigation/native';
+import {supabase}  from '../lib/supabase';
 
 export default function LoginScreen() {
   // tracks what the user types in each field
@@ -19,7 +20,7 @@ export default function LoginScreen() {
   const [passwordError, setPasswordError] = useState('');
 
   // checks email and password before allowing login
-  function validateAndLogin() {
+  async function validateAndLogin() {
     let valid = true;
 
     // email must contain @ symbol
@@ -38,10 +39,17 @@ export default function LoginScreen() {
       setPasswordError('');
     }
 
-    // real auth logic goes here once backend is connected
     if (valid) {
-      console.log('Login pressed');
-    }
+      const {error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error){
+        alert(error.message);
+      } else {
+        navigation.navigate('Home');
+      }
+    } 
   }
 
   return (
