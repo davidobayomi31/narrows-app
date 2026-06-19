@@ -26,7 +26,7 @@ export default function ProfileScreen() {
   const navigation = useNavigation <any>();
   async function handleLogout(){
     await supabase.auth.signOut();
-    navigation.avigate('Login');
+    navigation.navigate('Login');
   }
 
   return (
