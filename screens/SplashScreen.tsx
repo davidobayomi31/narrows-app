@@ -3,6 +3,8 @@ import {View, Image, StyleSheet} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import * as LocalAuthentication from 'expo-local-authentication';
 import {Colors} from '../constants/colors';
+import {supabase} from '../lib/supabase';
+
 
 export default function SplashScreen(){
     const navigation = useNavigation<any>();
@@ -16,21 +18,10 @@ export default function SplashScreen(){
         await new Promise(resolve => setTimeout(resolve, 2000));
 
         //check if use is still logged in - placeholder for now
-        const isLoggedIn = true; //change to false when done
-        const hasCredentials = false;
-
-        if (isLoggedIn){
+        const {data} = await supabase.auth.getSession();
+        if (data.session) {
             navigation.navigate('Home');
-        } else if (hasCredentials) {
-            const result = await LocalAuthentication.authenticateAsync({
-                promptMessage: 'Welcome back to Narrows',
-                fallbackLabel: 'Use password',
-            });
-            if(result.success){
-                navigation.navigate('Home');
-            } else {
-                navigation.navigate('Login');
-            }
+        
         } else {
             navigation.navigate('Login');
         }
