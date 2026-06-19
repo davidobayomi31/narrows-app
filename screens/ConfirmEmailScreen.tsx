@@ -21,7 +21,7 @@ export default function ConfirmEmailScreen() {
 
   async function verifyCode() {
     // the code must be 6 digits
-    if (code.length !== 6) {
+    if (code.length !== 8) {
       setCodeError('Enter the 6-digit code from your email');
       return;
     }
@@ -53,7 +53,7 @@ export default function ConfirmEmailScreen() {
           placeholder="123456"
           placeholderTextColor="#8899AA"
           keyboardType="number-pad"
-          maxLength={6}
+          maxLength={8}
           value={code}
           onChangeText={setCode}
         />
