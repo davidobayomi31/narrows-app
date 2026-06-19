@@ -62,7 +62,7 @@ export default function LoginScreen() {
       {/* allows the screen to scroll if content overflows */}
       <ScrollView
         contentContainerStyle={styles.container}
-        
+        keyboardShouldPersistTaps="handled"
       >
         <Image
           source={require('../assets/narrows-logo-clear.png')}
