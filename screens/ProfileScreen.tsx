@@ -2,7 +2,8 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 import { useState } from 'react';
-
+import { useNavigation } from '@react-navigation/native';
+import { supabase } from '../lib/supabase';
 const STATS = [
   { label: 'Trips', value: '12' },
   { label: 'Catches', value: '34' },
@@ -22,6 +23,11 @@ const CONDITION_COLORS: Record<string, string> = {
 export default function ProfileScreen() {
   const [activeLog, setActiveLog] = useState('Trip');
   const [activeCondition, setActiveCondition] = useState('GREAT');
+  const navigation = useNavigation <any>();
+  async function handleLogout(){
+    await supabase.auth.signOut();
+    navigation.avigate('Login');
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -88,6 +94,10 @@ export default function ProfileScreen() {
         {/* Post button */}
         <TouchableOpacity style={styles.postButton}>
           <Text style={styles.postButtonText}>Post to Dock Feed</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style ={styles.logoutButton} onPress={handleLogout}>
+          <Text style={styles.logoutButtonText}>Log Out</Text>
         </TouchableOpacity>
 
       </ScrollView>
@@ -224,4 +234,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
+  logoutButton: {
+  marginTop: 16,
+  padding: 16,
+  borderRadius: 12,
+  alignItems: 'center',
+  borderWidth: 1,
+  borderColor: '#FF4444',
+},
+logoutButtonText: {
+  color: '#FF4444',
+  fontSize: 16,
+  fontWeight: '700',
+},
 });

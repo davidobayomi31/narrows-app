@@ -75,7 +75,7 @@ export default function SignupScreen() {
             alert(error.message);
         } else {
             // navigate to onboarding after successful signup
-            navigation.navigate('Onboarding');
+            navigation.navigate('ConfirmEmail', {email});
         }
       
     }
