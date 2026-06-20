@@ -14,6 +14,14 @@ const STATS = [
 const LOG_TYPES = ['Trip', 'Catch', 'Check-in'];
 const CONDITIONS = ['GREAT', 'MIXED', 'ROUGH'];
 
+const AVATAR_COLORS = ['#2E4057', '#5B6C3F', '#7A4E2E', '#4A5D7E', '#6B4E71', '#3F6B5E', '#8A5A44', '#5A4E8A'];
+
+function getAvatarColor(name: string) {
+  const letter = name?.[0]?.toUpperCase() || 'B';
+  const index = letter.charCodeAt(0) % AVATAR_COLORS.length;
+  return AVATAR_COLORS[index];
+}
+
 const CONDITION_COLORS: Record<string, string> = {
   GREAT: '#166534',
   MIXED: '#92400E',
@@ -58,10 +66,11 @@ export default function ProfileScreen() {
 
         {/* User header */}
         <View style={styles.profileHeader}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>D</Text>
+          <View style={[styles.avatar, {backgroundColor: getAvatarColor(profile?.first_name) }]}>
+            <Text style={styles.avatarText}>{profile?.first_name?.[0] || 'B'}</Text>
           </View>
-          <Text style={styles.profileName}>{profile?.full_name || 'Boater'} </Text>
+          <Text style={styles.profileName}>{profile?.first_name || 'Boater'} {profile?.last_name || ''} 
+          </Text>
           <Text style={styles.profileSub}>{profile?.region || 'Set your region'}</Text>
         </View>
 

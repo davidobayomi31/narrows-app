@@ -22,10 +22,11 @@ export default function OnboardingScreen(){
         //save or updates this user profile
         const { error } = await supabase.from ('profiles').upsert ({
             id: user.id,
+            first_name: user.user_metadata.first_name,
+            last_name: user.user_metadata.last_name,
             boat_ownership: ownsBoat,
             region: region,
             experience_level: exprience,
-
         });
         if (error){
             alert(error.message);
