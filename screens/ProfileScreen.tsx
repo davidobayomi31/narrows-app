@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 const STATS = [
@@ -23,6 +23,29 @@ const CONDITION_COLORS: Record<string, string> = {
 export default function ProfileScreen() {
   const [activeLog, setActiveLog] = useState('Trip');
   const [activeCondition, setActiveCondition] = useState('GREAT');
+  const [profile, setProfile] = useState<any> (null);
+  //fecth user profile when screen loads
+  useEffect (() => {
+    loadProfile();
+
+  }, []);
+
+  async function loadProfile(){
+    const {data: {user} } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const {data, error} = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+      if (error){
+        console.log(error.message);
+      } else {
+        setProfile(data);
+      }
+  }
   const navigation = useNavigation <any>();
   async function handleLogout(){
     await supabase.auth.signOut();
@@ -38,8 +61,8 @@ export default function ProfileScreen() {
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>D</Text>
           </View>
-          <Text style={styles.profileName}>David</Text>
-          <Text style={styles.profileSub}>Simcoe County · Boat Owner</Text>
+          <Text style={styles.profileName}>{profile?.full_name || 'Boater'} </Text>
+          <Text style={styles.profileSub}>{profile?.region || 'Set your region'}</Text>
         </View>
 
         {/* Stats row */}
