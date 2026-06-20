@@ -20,7 +20,8 @@ export default function SignupScreen() {
   const navigation = useNavigation<any>();
 
   // tracks what user types in each field
-  const [fullName, setFullName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -28,7 +29,8 @@ export default function SignupScreen() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // holds error messages for each field
-  const [nameError, setNameError] = useState('');
+  const [firstnameError, setFristNameError] = useState('');
+  const [lastnameError, setLastNameError] = useState('');
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
@@ -37,12 +39,19 @@ export default function SignupScreen() {
   async function validateAndSignup() {
     let valid = true;
 
-    if (fullName.trim().length < 2) {
-      setNameError('Please enter your full name');
-      valid = false;
+    if (firstName.trim().length < 1) {
+        setFristNameError('Please enter your first name');
+        valid = false;
     } else {
-      setNameError('');
+        setFristNameError('');
     }
+
+if (lastName.trim().length < 1) {
+  setLastNameError('Please enter your last name');
+  valid = false;
+} else {
+  setLastNameError('');
+}
 
     if (!email.includes('@')) {
       setEmailError('Please enter a valid email address');
@@ -69,7 +78,13 @@ export default function SignupScreen() {
     if (valid) {
         const { error } = await supabase.auth.signUp({
             email,
-            password, 
+            password,
+            options: {
+                data: {
+                    first_name: firstName,
+                    last_name: lastName,
+                },
+            },
         });
         if(error) {
             alert(error.message);
@@ -99,13 +114,22 @@ export default function SignupScreen() {
         <View style={styles.divider} />
 
         <TextInput
-          style={[styles.input, nameError ? styles.inputError : null]}
-          placeholder="Full Name"
-          placeholderTextColor="#8899AA"
-          value={fullName}
-          onChangeText={setFullName}
+        style={[styles.input, firstnameError ? styles.inputError : null]}
+        placeholder="First Name"
+        placeholderTextColor="#8899AA"
+        value={firstName}
+        onChangeText={setFirstName}
         />
-        {nameError ? <Text style={styles.errorText}>{nameError}</Text> : null}
+        {firstnameError ? <Text style={styles.errorText}>{firstnameError}</Text> : null}
+
+        <TextInput
+        style={[styles.input, lastnameError ? styles.inputError : null]}
+        placeholder="Last Name"
+        placeholderTextColor="#8899AA"
+        value={lastName}
+        onChangeText={setLastName}
+        />
+        {lastnameError ? <Text style={styles.errorText}>{lastnameError}</Text> : null}
 
         <TextInput
           style={[styles.input, emailError ? styles.inputError : null]}
