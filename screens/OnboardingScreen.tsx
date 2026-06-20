@@ -2,6 +2,7 @@ import { View, Text, StyleSheet,TouchableOpacity,SafeAreaView, } from 'react-nat
 import {useState} from 'react';
 import {useNavigation} from '@react-navigation/native';
 import {Colors} from '../constants/colors';
+import {supabase} from '../lib/supabase';
 
 export default function OnboardingScreen(){
     const navigation = useNavigation <any>();
@@ -13,11 +14,31 @@ export default function OnboardingScreen(){
     const[region, setRegion] = useState<string | null > (null);
     const[exprience, setExprience] = useState<string | null>(null);
 
+    async function save_profile() {
+        // get currently loggin user
+        const{data: {user} } = await supabase.auth.getUser();
+        if (!user) return;
+
+        //save or updates this user profile
+        const { error } = await supabase.from ('profiles').upsert ({
+            id: user.id,
+            boat_ownership: ownsBoat,
+            region: region,
+            experience_level: exprience,
+
+        });
+        if (error){
+            alert(error.message);
+        }
+
+    }
+
     // move on to next question or home if last question
-    function handleNext(){
+    async function handleNext(){
         if (step < 2) {
            setStep (step + 1);
         }else{
+            await save_profile();
             navigation.navigate('Home')
         }
     }
