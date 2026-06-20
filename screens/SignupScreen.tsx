@@ -29,8 +29,8 @@ export default function SignupScreen() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // holds error messages for each field
-  const [firstnameError, setFristNameError] = useState('');
-  const [lastnameError, setLastNameError] = useState('');
+  const [firstNameError, setFirstNameError] = useState('');
+  const [lastNameError, setLastNameError] = useState('');
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
@@ -40,10 +40,10 @@ export default function SignupScreen() {
     let valid = true;
 
     if (firstName.trim().length < 1) {
-        setFristNameError('Please enter your first name');
+        setFirstNameError('Please enter your first name');
         valid = false;
     } else {
-        setFristNameError('');
+        setFirstNameError('');
     }
 
 if (lastName.trim().length < 1) {
@@ -114,22 +114,22 @@ if (lastName.trim().length < 1) {
         <View style={styles.divider} />
 
         <TextInput
-        style={[styles.input, firstnameError ? styles.inputError : null]}
+        style={[styles.input, firstNameError ? styles.inputError : null]}
         placeholder="First Name"
         placeholderTextColor="#8899AA"
         value={firstName}
         onChangeText={setFirstName}
         />
-        {firstnameError ? <Text style={styles.errorText}>{firstnameError}</Text> : null}
+        {firstNameError ? <Text style={styles.errorText}>{firstNameError}</Text> : null}
 
         <TextInput
-        style={[styles.input, lastnameError ? styles.inputError : null]}
+        style={[styles.input, lastNameError ? styles.inputError : null]}
         placeholder="Last Name"
         placeholderTextColor="#8899AA"
         value={lastName}
         onChangeText={setLastName}
         />
-        {lastnameError ? <Text style={styles.errorText}>{lastnameError}</Text> : null}
+        {lastNameError ? <Text style={styles.errorText}>{lastNameError}</Text> : null}
 
         <TextInput
           style={[styles.input, emailError ? styles.inputError : null]}
