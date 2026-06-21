@@ -84,6 +84,7 @@ export default function FeedScreen() {
   const [length, setLength] = useState('');
   const [released, setReleased] = useState(false);
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [viewImageUri, setViewImageUri] = useState<string | null>(null);
 
   useEffect(() => {
     loadPosts();
@@ -163,7 +164,7 @@ export default function FeedScreen() {
   }
 
   function pickImage() {
-    Alert.alert('Add Photo', 'Choose a source', [
+    Alert.alert('Add Photo', undefined, [
       { text: 'Take Photo', onPress: takePhoto },
       { text: 'Choose from Library', onPress: pickFromLibrary },
       { text: 'Cancel', style: 'cancel' },
@@ -361,7 +362,16 @@ async function uploadImage(uri: string) {
               <TouchableOpacity style={styles.photoButton} onPress={pickImage}>
                 <Text style={styles.photoButtonText}>{imageUri ? 'Change Photo' : '📷  Add Photo'}</Text>
                 </TouchableOpacity>
-                {imageUri && <Image source={{ uri: imageUri }} style={styles.photoPreview} />}
+                {imageUri && (
+                  <View style={styles.previewWrap}>
+                    <TouchableOpacity activeOpacity={0.9} onPress={() => setViewImageUri(imageUri)}>
+                      <Image source={{ uri: imageUri }} style={styles.photoPreview} />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.trashButton} onPress={() => setImageUri(null)}>
+                      <Text style={styles.trashIcon}>🗑</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
 
               <TextInput
                 style={styles.captionInput}
@@ -377,6 +387,20 @@ async function uploadImage(uri: string) {
               </TouchableOpacity>
             </Pressable>
           </KeyboardAvoidingView>
+        </Pressable>
+      </Modal>
+
+      {/* Full-screen image viewer */}
+      <Modal
+        visible={!!viewImageUri}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setViewImageUri(null)}
+      >
+        <Pressable style={styles.imageViewerOverlay} onPress={() => setViewImageUri(null)}>
+          {viewImageUri && (
+            <Image source={{ uri: viewImageUri }} style={styles.fullImage} resizeMode="contain" />
+          )}
         </Pressable>
       </Modal>
     </SafeAreaView>
@@ -610,7 +634,34 @@ photoPreview: {
   width: '100%',
   height: 180,
   borderRadius: 12,
+},
+previewWrap: {
+  position: 'relative',
   marginTop: 12,
+},
+trashButton: {
+  position: 'absolute',
+  top: 8,
+  right: 8,
+  backgroundColor: 'rgba(0,0,0,0.6)',
+  width: 32,
+  height: 32,
+  borderRadius: 16,
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+trashIcon: {
+  fontSize: 16,
+},
+imageViewerOverlay: {
+  flex: 1,
+  backgroundColor: 'rgba(0,0,0,0.92)',
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+fullImage: {
+  width: '100%',
+  height: '80%',
 },
 postImage: {
   width: '100%',
