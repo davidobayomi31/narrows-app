@@ -8,12 +8,15 @@ import {
   KeyboardAvoidingView,
   Platform,
   Modal,
-  
+  Image,
+  Pressable,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect } from 'react';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
+import * as ImagePicker from 'expo-image-picker';
 
 const FILTER = ['All', 'Trips', 'Catches', 'Check-ins'];
 const LOG_TYPES = ['Trip', 'Catch', 'Check-in'];
@@ -80,6 +83,7 @@ export default function FeedScreen() {
   const [weight, setWeight] = useState('');
   const [length, setLength] = useState('');
   const [released, setReleased] = useState(false);
+  const [imageUri, setImageUri] = useState<string | null>(null);
 
   useEffect(() => {
     loadPosts();
@@ -120,6 +124,12 @@ export default function FeedScreen() {
       return;
     }
 
+        // upload the photo first (if one was picked)
+    let image_url = null;
+    if (imageUri) {
+      image_url = await uploadImage(imageUri);
+    }
+
     const { error } = await supabase.from('posts').insert({
       user_id: user.id,
       type: TYPE_MAP[activeLog],
@@ -132,6 +142,7 @@ export default function FeedScreen() {
       weight_lbs: weight ? Number(weight) : null,
       length_in: length ? Number(length) : null,
       released: activeLog === 'Catch' ? released : null,
+      image_url: image_url,
     });
 
     if (error) {
@@ -145,10 +156,61 @@ export default function FeedScreen() {
       setWeight('');
       setLength('');
       setReleased(false);
+      setImageUri(null);
       setShowComposer(false);
       loadPosts();
     }
   }
+
+  function pickImage() {
+    Alert.alert('Add Photo', 'Choose a source', [
+      { text: 'Take Photo', onPress: takePhoto },
+      { text: 'Choose from Library', onPress: pickFromLibrary },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }
+
+  async function takePhoto() {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      alert('Camera permission is needed to take a photo');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
+    if (!result.canceled) {
+      setImageUri(result.assets[0].uri);
+    }
+  }
+
+  async function pickFromLibrary() {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.7,
+    });
+    if (!result.canceled) {
+      setImageUri(result.assets[0].uri);
+    }
+  }
+
+async function uploadImage(uri: string) {
+  // turn the local file into raw binary
+  const arraybuffer = await fetch(uri).then((res) => res.arrayBuffer());
+  const ext = uri.split('.').pop()?.toLowerCase() ?? 'jpeg';
+  const path = `${Date.now()}.${ext}`;
+  const contentType = ext === 'png' ? 'image/png' : 'image/jpeg';
+
+  const { error } = await supabase.storage
+    .from('post-images')
+    .upload(path, arraybuffer, { contentType });
+
+  if (error) {
+    alert(error.message);
+    return null;
+  }
+  // get the public URL to store in the post
+  const { data } = supabase.storage.from('post-images').getPublicUrl(path);
+  return data.publicUrl;
+}
 
   // only show posts matching the active filter
   const visiblePosts =
@@ -197,6 +259,7 @@ export default function FeedScreen() {
                 </View>
               </View>
               <Text style={styles.cardText}>{post.caption}</Text>
+              {post.image_url && <Image source={{ uri: post.image_url }} style={styles.postImage} />}
               <TouchableOpacity style={styles.anchorButton}>
                 <Text style={styles.anchorText}>⚓</Text>
               </TouchableOpacity>
@@ -217,11 +280,11 @@ export default function FeedScreen() {
         transparent
         onRequestClose={() => setShowComposer(false)}
       >
-        <View style={styles.modalOverlay}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowComposer(false)}>
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           >
-            <View style={styles.modalSheet}>
+            <Pressable style={styles.modalSheet} onPress={() => {}}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>New Post</Text>
                 <TouchableOpacity onPress={() => setShowComposer(false)}>
@@ -257,6 +320,7 @@ export default function FeedScreen() {
                       >
                         <Text style={[styles.tabText, activeCondition === cond && { color: Colors.white }]}>{cond}</Text>
                       </TouchableOpacity>
+
                     ))}
                   </View>
                   <TextInput style={styles.fieldInput} placeholder="Duration (hours)" placeholderTextColor="#8899AA" keyboardType="numeric" value={duration} onChangeText={setDuration} />
@@ -294,7 +358,10 @@ export default function FeedScreen() {
                 <TextInput style={[styles.fieldInput, { marginTop: 16 }]} placeholder="Where are you? (marina / location)" placeholderTextColor="#8899AA" value={location} onChangeText={setLocation} />
               )}
 
-
+              <TouchableOpacity style={styles.photoButton} onPress={pickImage}>
+                <Text style={styles.photoButtonText}>{imageUri ? 'Change Photo' : '📷  Add Photo'}</Text>
+                </TouchableOpacity>
+                {imageUri && <Image source={{ uri: imageUri }} style={styles.photoPreview} />}
 
               <TextInput
                 style={styles.captionInput}
@@ -308,9 +375,9 @@ export default function FeedScreen() {
               <TouchableOpacity style={styles.postButton} onPress={handlePost}>
                 <Text style={styles.postButtonText}>Post to Dock Feed</Text>
               </TouchableOpacity>
-            </View>
+            </Pressable>
           </KeyboardAvoidingView>
-        </View>
+        </Pressable>
       </Modal>
     </SafeAreaView>
   );
@@ -525,6 +592,31 @@ const styles = StyleSheet.create({
   marginTop: 12,
   borderWidth: 1,
   borderColor: '#333333',
+},
+photoButton: {
+  marginTop: 12,
+  paddingVertical: 12,
+  borderRadius: 10,
+  borderWidth: 1,
+  borderColor: '#2E4057',
+  alignItems: 'center',
+},
+photoButtonText: {
+  color: Colors.gold,
+  fontSize: 14,
+  fontWeight: '600',
+},
+photoPreview: {
+  width: '100%',
+  height: 180,
+  borderRadius: 12,
+  marginTop: 12,
+},
+postImage: {
+  width: '100%',
+  height: 200,
+  borderRadius: 12,
+  marginBottom: 12,
 },
 wrapRow: {
   flexDirection: 'row',

@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect } from 'react';
 import { useNavigation } from '@react-navigation/native';
@@ -84,6 +84,22 @@ export default function ProfileScreen() {
     navigation.navigate('Login');
   }
 
+  function confirmDelete(id: string) {
+    Alert.alert('Delete Post', 'Are you sure you want to delete this post?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => deletePost(id) },
+    ]);
+  }
+
+  async function deletePost(id: string) {
+    const { error } = await supabase.from('posts').delete().eq('id', id);
+    if (error) {
+      alert(error.message);
+    } else {
+      loadMyPosts();
+    }
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -115,7 +131,11 @@ export default function ProfileScreen() {
           <Text style={styles.emptyText}>You haven't posted anything yet.</Text>
         ) : (
           myPosts.map((post) => (
-            <View key={post.id} style={styles.card}>
+            <TouchableOpacity
+              key={post.id}
+              style={styles.card}
+              onLongPress={() => confirmDelete(post.id)}
+            >
               <View style={styles.postHeader}>
                 <View style={[styles.badge, { backgroundColor: BADGE_COLORS[post.type] }]}>
                   <Text style={styles.badgeText}>{post.type}</Text>
@@ -123,7 +143,7 @@ export default function ProfileScreen() {
                 <Text style={styles.postTime}>{timeAgo(post.created_at)}</Text>
               </View>
               <Text style={styles.postCaption}>{post.caption}</Text>
-            </View>
+            </TouchableOpacity>
           ))
         )}
 
