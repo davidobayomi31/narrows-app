@@ -8,6 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Modal,
+  
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect } from 'react';
@@ -17,6 +18,7 @@ import { supabase } from '../lib/supabase';
 const FILTER = ['All', 'Trips', 'Catches', 'Check-ins'];
 const LOG_TYPES = ['Trip', 'Catch', 'Check-in'];
 const CONDITIONS = ['GREAT', 'MIXED', 'ROUGH'];
+const SPECIES = ['Bass', 'Pike', 'Walleye', 'Perch', 'Musky', 'Trout', 'Other'];
 
 // converts the composer label to the code stored in the database
 const TYPE_MAP: Record<string, string> = {
@@ -71,6 +73,14 @@ export default function FeedScreen() {
   const [activeCondition, setActiveCondition] = useState('GREAT');
   const [caption, setCaption] = useState('');
 
+  const [duration, setDuration] = useState('');
+  const [distance, setDistance] = useState('');
+  const [location, setLocation] = useState('');
+  const [species, setSpecies] = useState('');
+  const [weight, setWeight] = useState('');
+  const [length, setLength] = useState('');
+  const [released, setReleased] = useState(false);
+
   useEffect(() => {
     loadPosts();
   }, []);
@@ -113,14 +123,28 @@ export default function FeedScreen() {
     const { error } = await supabase.from('posts').insert({
       user_id: user.id,
       type: TYPE_MAP[activeLog],
-      conditions: activeCondition,
+      conditions: activeLog === 'Trip' ? activeCondition : null,
       caption: caption,
+      location: location || null,
+      duration_hours: duration ? Number(duration) : null,
+      distance_km: distance ? Number(distance) : null,
+      species: species || null,
+      weight_lbs: weight ? Number(weight) : null,
+      length_in: length ? Number(length) : null,
+      released: activeLog === 'Catch' ? released : null,
     });
 
     if (error) {
       alert(error.message);
     } else {
       setCaption('');
+      setDuration('');
+      setDistance('');
+      setLocation('');
+      setSpecies('');
+      setWeight('');
+      setLength('');
+      setReleased(false);
       setShowComposer(false);
       loadPosts();
     }
@@ -220,26 +244,57 @@ export default function FeedScreen() {
                 ))}
               </View>
 
-              <Text style={[styles.cardTitle, { marginTop: 16 }]}>How were the conditions?</Text>
-              <View style={styles.row}>
-                {CONDITIONS.map((cond) => (
-                  <TouchableOpacity
-                    key={cond}
-                    style={[
-                      styles.tab,
-                      activeCondition === cond && {
-                        backgroundColor: CONDITION_COLORS[cond],
-                        borderColor: CONDITION_COLORS[cond],
-                      },
-                    ]}
-                    onPress={() => setActiveCondition(cond)}
-                  >
-                    <Text style={[styles.tabText, activeCondition === cond && { color: Colors.white }]}>
-                      {cond}
-                    </Text>
+              {/* Trip fields */}
+              {activeLog === 'Trip' && (
+                <>
+                  <Text style={[styles.cardTitle, { marginTop: 16 }]}>How were the conditions?</Text>
+                  <View style={styles.row}>
+                    {CONDITIONS.map((cond) => (
+                      <TouchableOpacity
+                        key={cond}
+                        style={[styles.tab, activeCondition === cond && { backgroundColor: CONDITION_COLORS[cond], borderColor: CONDITION_COLORS[cond] }]}
+                        onPress={() => setActiveCondition(cond)}
+                      >
+                        <Text style={[styles.tabText, activeCondition === cond && { color: Colors.white }]}>{cond}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <TextInput style={styles.fieldInput} placeholder="Duration (hours)" placeholderTextColor="#8899AA" keyboardType="numeric" value={duration} onChangeText={setDuration} />
+                  <TextInput style={styles.fieldInput} placeholder="Distance (km)" placeholderTextColor="#8899AA" keyboardType="numeric" value={distance} onChangeText={setDistance} />
+                  <TextInput style={styles.fieldInput} placeholder="Where? (e.g. Narrows to Sparrow Lake)" placeholderTextColor="#8899AA" value={location} onChangeText={setLocation} />
+                </>
+              )}
+
+              {/* Catch fields */}
+              {activeLog === 'Catch' && (
+                <>
+                  <Text style={[styles.cardTitle, { marginTop: 16 }]}>Species</Text>
+                  <View style={styles.wrapRow}>
+                    {SPECIES.map((s) => (
+                      <TouchableOpacity
+                        key={s}
+                        style={[styles.pill, species === s && styles.tabActive]}
+                        onPress={() => setSpecies(s)}
+                      >
+                        <Text style={[styles.tabText, species === s && styles.tabTextActive]}>{s}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <TextInput style={styles.fieldInput} placeholder="Weight (lbs)" placeholderTextColor="#8899AA" keyboardType="numeric" value={weight} onChangeText={setWeight} />
+                  <TextInput style={styles.fieldInput} placeholder="Length (inches)" placeholderTextColor="#8899AA" keyboardType="numeric" value={length} onChangeText={setLength} />
+                  <TextInput style={styles.fieldInput} placeholder="Spot (where you caught it)" placeholderTextColor="#8899AA" value={location} onChangeText={setLocation} />
+                  <TouchableOpacity style={[styles.releaseToggle, released && styles.tabActive]} onPress={() => setReleased(!released)}>
+                    <Text style={[styles.tabText, released && styles.tabTextActive]}>{released ? '✓ Released' : 'Released?'}</Text>
                   </TouchableOpacity>
-                ))}
-              </View>
+                </>
+              )}
+
+              {/* Check-in fields */}
+              {activeLog === 'Check-in' && (
+                <TextInput style={[styles.fieldInput, { marginTop: 16 }]} placeholder="Where are you? (marina / location)" placeholderTextColor="#8899AA" value={location} onChangeText={setLocation} />
+              )}
+
+
 
               <TextInput
                 style={styles.captionInput}
@@ -461,6 +516,36 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#333333',
   },
+  fieldInput: {
+  backgroundColor: '#1A1A1A',
+  color: Colors.cream,
+  borderRadius: 12,
+  padding: 14,
+  fontSize: 15,
+  marginTop: 12,
+  borderWidth: 1,
+  borderColor: '#333333',
+},
+wrapRow: {
+  flexDirection: 'row',
+  flexWrap: 'wrap',
+  gap: 8,
+},
+pill: {
+  paddingHorizontal: 14,
+  paddingVertical: 8,
+  borderRadius: 20,
+  borderWidth: 1,
+  borderColor: '#2E4057',
+},
+releaseToggle: {
+  marginTop: 12,
+  paddingVertical: 10,
+  borderRadius: 10,
+  borderWidth: 1,
+  borderColor: '#2E4057',
+  alignItems: 'center',
+},
   postButton: {
     backgroundColor: Colors.gold,
     borderRadius: 12,
