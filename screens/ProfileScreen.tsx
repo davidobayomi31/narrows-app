@@ -1,8 +1,8 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors } from '../constants/colors';
 import { useState, useEffect } from 'react';
 import { useNavigation } from '@react-navigation/native';
+import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
 
 const STATS = [
@@ -12,97 +12,89 @@ const STATS = [
   { label: 'Hours', value: '41' },
 ];
 
-const TYPE_MAP: Record<string, string> = {
-  Trip: 'TRIP',
-  Catch: 'CATCH', 
-  'Check-in': 'CHECK',
+const BADGE_COLORS: Record<string, string> = {
+  TRIP: '#1B4FD8',
+  CATCH: '#166534',
+  CHECK: '#92400E',
 };
-const LOG_TYPES = ['Trip', 'Catch', 'Check-in']; 
-const CONDITIONS = ['GREAT', 'MIXED', 'ROUGH'];
 
 const AVATAR_COLORS = ['#2E4057', '#5B6C3F', '#7A4E2E', '#4A5D7E', '#6B4E71', '#3F6B5E', '#8A5A44', '#5A4E8A'];
 
 function getAvatarColor(name: string) {
   const letter = name?.[0]?.toUpperCase() || 'B';
-  const index = letter.charCodeAt(0) % AVATAR_COLORS.length;
-  return AVATAR_COLORS[index];
+  return AVATAR_COLORS[letter.charCodeAt(0) % AVATAR_COLORS.length];
 }
 
-const CONDITION_COLORS: Record<string, string> = {
-  GREAT: '#166534',
-  MIXED: '#92400E',
-  ROUGH: '#7F1D1D',
-};
+function timeAgo(iso: string) {
+  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
 
 export default function ProfileScreen() {
-  const [activeLog, setActiveLog] = useState('Trip');
-  const [activeCondition, setActiveCondition] = useState('GREAT');
-  const [profile, setProfile] = useState<any> (null);
-  const [caption, setCaption] = useState('');
-  //fecth user profile when screen loads
-  useEffect (() => {
-    loadProfile();
+  const navigation = useNavigation<any>();
+  const [profile, setProfile] = useState<any>(null);
+  const [myPosts, setMyPosts] = useState<any[]>([]);
 
+  useEffect(() => {
+    loadProfile();
+    loadMyPosts();
   }, []);
 
-  async function loadProfile(){
-    const {data: {user} } = await supabase.auth.getUser();
+  async function loadProfile() {
+    const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const {data, error} = await supabase
+    const { data, error } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', user.id)
       .single();
 
-      if (error){
-        console.log(error.message);
-      } else {
-        setProfile(data);
-      }
+    if (error) {
+      console.log(error.message);
+    } else {
+      setProfile(data);
+    }
   }
-  const navigation = useNavigation <any>();
-  async function handleLogout(){ 
-    await supabase.auth.signOut();
-    navigation.navigate('Login');
-  }
-//handle posts
-  async function handlePost() {
+
+  async function loadMyPosts() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const { error } = await supabase.from('posts').insert({
-      user_id: user.id,
-      type: TYPE_MAP[activeLog],
-      conditions: activeCondition,
-      caption: caption,
-    });
+    // only this user's own posts, newest first
+    const { data, error } = await supabase
+      .from('posts')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
 
     if (error) {
-      alert(error.message);
+      console.log(error.message);
     } else {
-      setCaption('');
-      alert('Posted to the dock feed!');
+      setMyPosts(data || []);
     }
+  }
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    navigation.navigate('Login');
   }
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-      >
+      <ScrollView contentContainerStyle={styles.scrollContent}>
 
         {/* User header */}
         <View style={styles.profileHeader}>
-          <View style={[styles.avatar, {backgroundColor: getAvatarColor(profile?.first_name) }]}>
+          <View style={[styles.avatar, { backgroundColor: getAvatarColor(profile?.first_name) }]}>
             <Text style={styles.avatarText}>{profile?.first_name?.[0] || 'B'}</Text>
           </View>
-          <Text style={styles.profileName}>{profile?.first_name || 'Boater'} {profile?.last_name || ''} 
+          <Text style={styles.profileName}>
+            {profile?.first_name || 'Boater'} {profile?.last_name || ''}
           </Text>
           <Text style={styles.profileSub}>{profile?.region || 'Set your region'}</Text>
         </View>
@@ -117,63 +109,30 @@ export default function ProfileScreen() {
           ))}
         </View>
 
-        {/* Log activity */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>What are you logging?</Text>
-          <View style={styles.logRow}>
-            {LOG_TYPES.map((type) => (
-              <TouchableOpacity
-                key={type}
-                style={[styles.logTab, activeLog === type && styles.logTabActive]}
-                onPress={() => setActiveLog(type)}
-              >
-                <Text style={[styles.logText, activeLog === type && styles.logTextActive]}>
-                  {type}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
+        {/* Your posts */}
+        <Text style={styles.sectionTitle}>Your Posts</Text>
+        {myPosts.length === 0 ? (
+          <Text style={styles.emptyText}>You haven't posted anything yet.</Text>
+        ) : (
+          myPosts.map((post) => (
+            <View key={post.id} style={styles.card}>
+              <View style={styles.postHeader}>
+                <View style={[styles.badge, { backgroundColor: BADGE_COLORS[post.type] }]}>
+                  <Text style={styles.badgeText}>{post.type}</Text>
+                </View>
+                <Text style={styles.postTime}>{timeAgo(post.created_at)}</Text>
+              </View>
+              <Text style={styles.postCaption}>{post.caption}</Text>
+            </View>
+          ))
+        )}
 
-        {/* Conditions */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>How were the conditions?</Text>
-          <View style={styles.conditionRow}>
-            {CONDITIONS.map((cond) => (
-              <TouchableOpacity
-                key={cond}
-                style={[
-                  styles.conditionTab,
-                  activeCondition === cond && { backgroundColor: CONDITION_COLORS[cond], borderColor: CONDITION_COLORS[cond] },
-                ]}
-                onPress={() => setActiveCondition(cond)}
-              >
-                <Text style={[styles.conditionText, activeCondition === cond && styles.conditionTextActive]}>
-                  {cond}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-        <TextInput
-          style={styles.captionInput}
-          placeholder="Say something about it..."
-          placeholderTextColor="#8899AA"
-          value={caption}
-          onChangeText={setCaption}
-          multiline
-        />
-        {/* Post button */} 
-        <TouchableOpacity style={styles.postButton} onPress={handlePost}>
-          <Text style={styles.postButtonText}>Post to Dock Feed</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style ={styles.logoutButton} onPress={handleLogout}>
+        {/* Log out */}
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutButtonText}>Log Out</Text>
         </TouchableOpacity>
 
       </ScrollView>
-      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -195,7 +154,6 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: '#2E4057',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
@@ -221,7 +179,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#1E1E1E',
-    marginBottom: 16,
+    marginBottom: 24,
   },
   statCell: {
     flex: 1,
@@ -238,97 +196,61 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
+  sectionTitle: {
+    color: Colors.cream,
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 12,
+  },
+  emptyText: {
+    color: '#8899AA',
+    fontSize: 14,
+    marginBottom: 24,
+  },
   card: {
     backgroundColor: '#0F0F0F',
     borderRadius: 16,
     padding: 16,
-    marginBottom: 16,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: '#1E1E1E',
   },
-  cardTitle: {
-    color: Colors.cream,
-    fontSize: 15,
-    fontWeight: '700',
-    marginBottom: 14,
-  },
-  logRow: {
+  postHeader: {
     flexDirection: 'row',
-    gap: 8,
-  },
-  logTab: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#2E4057',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
   },
-  logTabActive: {
-    backgroundColor: Colors.gold,
-    borderColor: Colors.gold,
+  badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
-  logText: {
-    color: '#8899AA',
-    fontSize: 13,
-  },
-  logTextActive: {
-    color: Colors.black,
+  badgeText: {
+    color: Colors.white,
+    fontSize: 11,
     fontWeight: '700',
   },
-  conditionRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  conditionTab: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#2E4057',
-    alignItems: 'center',
-  },
-  conditionText: {
+  postTime: {
     color: '#8899AA',
     fontSize: 12,
-    fontWeight: '600',
   },
-  conditionTextActive: {
-    color: Colors.white,
+  postCaption: {
+    color: '#8899AA',
+    fontSize: 14,
+    lineHeight: 20,
   },
-  postButton: {
-    backgroundColor: Colors.gold,
-    borderRadius: 12,
+  logoutButton: {
+    marginTop: 16,
     padding: 16,
+    borderRadius: 12,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FF4444',
   },
-  postButtonText: {
-    color: Colors.black,
+  logoutButtonText: {
+    color: '#FF4444',
     fontSize: 16,
     fontWeight: '700',
   },
-  logoutButton: {
-  marginTop: 16,
-  padding: 16,
-  borderRadius: 12,
-  alignItems: 'center',
-  borderWidth: 1,
-  borderColor: '#FF4444',
-},
-logoutButtonText: {
-  color: '#FF4444',
-  fontSize: 16,
-  fontWeight: '700',
-},
-captionInput: {
-  backgroundColor: '#1A1A1A',
-  color: Colors.cream,
-  borderRadius: 12,
-  padding: 16,
-  fontSize: 15,
-  minHeight: 60,
-  marginBottom: 16,
-  borderWidth: 1,
-  borderColor: '#333333',
-},
 });
