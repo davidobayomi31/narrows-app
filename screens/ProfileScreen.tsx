@@ -1,9 +1,10 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 import { useState, useEffect } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
+
 const STATS = [
   { label: 'Trips', value: '12' },
   { label: 'Catches', value: '34' },
@@ -11,7 +12,12 @@ const STATS = [
   { label: 'Hours', value: '41' },
 ];
 
-const LOG_TYPES = ['Trip', 'Catch', 'Check-in'];
+const TYPE_MAP: Record<string, string> = {
+  Trip: 'TRIP',
+  Catch: 'CATCH', 
+  'Check-in': 'CHECK',
+};
+const LOG_TYPES = ['Trip', 'Catch', 'Check-in']; 
 const CONDITIONS = ['GREAT', 'MIXED', 'ROUGH'];
 
 const AVATAR_COLORS = ['#2E4057', '#5B6C3F', '#7A4E2E', '#4A5D7E', '#6B4E71', '#3F6B5E', '#8A5A44', '#5A4E8A'];
@@ -32,6 +38,7 @@ export default function ProfileScreen() {
   const [activeLog, setActiveLog] = useState('Trip');
   const [activeCondition, setActiveCondition] = useState('GREAT');
   const [profile, setProfile] = useState<any> (null);
+  const [caption, setCaption] = useState('');
   //fecth user profile when screen loads
   useEffect (() => {
     loadProfile();
@@ -55,9 +62,28 @@ export default function ProfileScreen() {
       }
   }
   const navigation = useNavigation <any>();
-  async function handleLogout(){
+  async function handleLogout(){ 
     await supabase.auth.signOut();
     navigation.navigate('Login');
+  }
+//handle posts
+  async function handlePost() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { error } = await supabase.from('posts').insert({
+      user_id: user.id,
+      type: TYPE_MAP[activeLog],
+      conditions: activeCondition,
+      caption: caption,
+    });
+
+    if (error) {
+      alert(error.message);
+    } else {
+      setCaption('');
+      alert('Posted to the dock feed!');
+    }
   }
 
   return (
@@ -122,9 +148,16 @@ export default function ProfileScreen() {
             ))}
           </View>
         </View>
-
-        {/* Post button */}
-        <TouchableOpacity style={styles.postButton}>
+        <TextInput
+          style={styles.captionInput}
+          placeholder="Say something about it..."
+          placeholderTextColor="#8899AA"
+          value={caption}
+          onChangeText={setCaption}
+          multiline
+        />
+        {/* Post button */} 
+        <TouchableOpacity style={styles.postButton} onPress={handlePost}>
           <Text style={styles.postButtonText}>Post to Dock Feed</Text>
         </TouchableOpacity>
 
@@ -278,5 +311,16 @@ logoutButtonText: {
   color: '#FF4444',
   fontSize: 16,
   fontWeight: '700',
+},
+captionInput: {
+  backgroundColor: '#1A1A1A',
+  color: Colors.cream,
+  borderRadius: 12,
+  padding: 16,
+  fontSize: 15,
+  minHeight: 60,
+  marginBottom: 16,
+  borderWidth: 1,
+  borderColor: '#333333',
 },
 });
