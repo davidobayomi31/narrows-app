@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
+import PostComposer from './components/PostComposer';
 
 const STATS = [
   { label: 'Trips', value: '12' },
@@ -38,6 +39,7 @@ export default function ProfileScreen() {
   const navigation = useNavigation<any>();
   const [profile, setProfile] = useState<any>(null);
   const [myPosts, setMyPosts] = useState<any[]>([]);
+  const [editingPost, setEditingPost] = useState<any>(null);
 
   useEffect(() => {
     loadProfile();
@@ -84,10 +86,11 @@ export default function ProfileScreen() {
     navigation.navigate('Login');
   }
 
-  function confirmDelete(id: string) {
-    Alert.alert('Delete Post', 'Are you sure you want to delete this post?', [
+  function postMenu(post: any) {
+    Alert.alert('Post Options', undefined, [
+      { text: 'Edit', onPress: () => setEditingPost(post) },
+      { text: 'Delete', style: 'destructive', onPress: () => deletePost(post.id) },
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => deletePost(id) },
     ]);
   }
 
@@ -134,7 +137,7 @@ export default function ProfileScreen() {
             <TouchableOpacity
               key={post.id}
               style={styles.card}
-              onLongPress={() => confirmDelete(post.id)}
+              onLongPress={() => postMenu(post)}
             >
               <View style={styles.postHeader}>
                 <View style={[styles.badge, { backgroundColor: BADGE_COLORS[post.type] }]}>
@@ -153,6 +156,14 @@ export default function ProfileScreen() {
         </TouchableOpacity>
 
       </ScrollView>
+
+      {/* Shared composer (edit mode) */}
+      <PostComposer
+        visible={!!editingPost}
+        editingPost={editingPost}
+        onClose={() => setEditingPost(null)}
+        onSaved={loadMyPosts}
+      />
     </SafeAreaView>
   );
 }
