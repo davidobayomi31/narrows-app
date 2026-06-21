@@ -272,7 +272,7 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost }:
                     <Image source={{ uri: imageUri }} style={styles.photoPreview} />
                   </TouchableOpacity>
                   <TouchableOpacity style={styles.trashButton} onPress={() => setImageUri(null)}>
-                    <Text style={styles.trashIcon}>🗑</Text>
+                    <Image source={require('../../assets/trash.png')} style={styles.trashIconImage} />
                   </TouchableOpacity>
                 </View>
               )}
@@ -471,4 +471,9 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '80%',
   },
+  trashIconImage: {
+  width: 18,
+  height: 18,
+  tintColor: '#FFFFFF',
+},
 });
