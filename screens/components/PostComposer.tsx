@@ -2,6 +2,7 @@ import {
   View,
   Text,
   StyleSheet,
+  ScrollView,
   TouchableOpacity,
   TextInput,
   KeyboardAvoidingView,
@@ -191,6 +192,7 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost }:
         <Pressable style={styles.modalOverlay} onPress={onClose}>
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
             <Pressable style={styles.modalSheet} onPress={() => {}}>
+              <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>{editingPost ? 'Edit Post' : 'New Post'}</Text>
                 <TouchableOpacity onPress={onClose}>
@@ -249,12 +251,6 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost }:
                       </TouchableOpacity>
                     ))}
                   </View>
-                  <TextInput style={styles.fieldInput} placeholder="Weight (lbs)" placeholderTextColor="#8899AA" keyboardType="numeric" value={weight} onChangeText={setWeight} />
-                  <TextInput style={styles.fieldInput} placeholder="Length (inches)" placeholderTextColor="#8899AA" keyboardType="numeric" value={length} onChangeText={setLength} />
-                  <TextInput style={styles.fieldInput} placeholder="Spot (where you caught it)" placeholderTextColor="#8899AA" value={location} onChangeText={setLocation} />
-                  <TouchableOpacity style={[styles.releaseToggle, released && styles.tabActive]} onPress={() => setReleased(!released)}>
-                    <Text style={[styles.tabText, released && styles.tabTextActive]}>{released ? '✓ Released' : 'Released?'}</Text>
-                  </TouchableOpacity>
                 </>
               )}
 
@@ -289,6 +285,7 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost }:
               <TouchableOpacity style={styles.postButton} onPress={handleSave}>
                 <Text style={styles.postButtonText}>{editingPost ? 'Save Changes' : 'Post to Dock Feed'}</Text>
               </TouchableOpacity>
+              </ScrollView>
             </Pressable>
           </KeyboardAvoidingView>
         </Pressable>
@@ -325,6 +322,7 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     borderWidth: 1,
     borderColor: '#1E1E1E',
+    maxHeight: '85%',
   },
   modalHeader: {
     flexDirection: 'row',

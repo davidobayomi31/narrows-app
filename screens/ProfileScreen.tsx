@@ -1,17 +1,10 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useState, useEffect } from 'react';
-import { useNavigation } from '@react-navigation/native';
+import { useState, useCallback } from 'react';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
 import PostComposer from './components/PostComposer';
-
-const STATS = [
-  { label: 'Trips', value: '12' },
-  { label: 'Catches', value: '34' },
-  { label: 'Km', value: '287' },
-  { label: 'Hours', value: '41' },
-];
 
 const BADGE_COLORS: Record<string, string> = {
   TRIP: '#1B4FD8',
@@ -41,10 +34,21 @@ export default function ProfileScreen() {
   const [myPosts, setMyPosts] = useState<any[]>([]);
   const [editingPost, setEditingPost] = useState<any>(null);
 
-  useEffect(() => {
-    loadProfile();
-    loadMyPosts();
-  }, []);
+  // reload every time the Profile tab comes into focus (so new posts show up)
+  useFocusEffect(
+    useCallback(() => {
+      loadProfile();
+      loadMyPosts();
+    }, [])
+  );
+
+  // stats computed from this user's posts
+  const stats = [
+    { label: 'Trips', value: String(myPosts.filter((p) => p.type === 'TRIP').length) },
+    { label: 'Catches', value: String(myPosts.filter((p) => p.type === 'CATCH').length) },
+    { label: 'Km', value: String(Math.round(myPosts.reduce((s, p) => s + (p.distance_km || 0), 0) * 10) / 10) },
+    { label: 'Hours', value: String(Math.round(myPosts.reduce((s, p) => s + (p.duration_hours || 0), 0) * 10) / 10) },
+  ];
 
   async function loadProfile() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -120,7 +124,7 @@ export default function ProfileScreen() {
 
         {/* Stats row */}
         <View style={styles.statsRow}>
-          {STATS.map((stat) => (
+          {stats.map((stat) => (
             <View key={stat.label} style={styles.statCell}>
               <Text style={styles.statValue}>{stat.value}</Text>
               <Text style={styles.statLabel}>{stat.label}</Text>

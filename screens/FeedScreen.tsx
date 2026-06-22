@@ -70,13 +70,36 @@ export default function FeedScreen() {
       .from('profiles')
       .select('id, first_name, last_name, region');
 
-    // 3. attach the matching profile to each post
-    const merged = (postsData || []).map((post) => ({
-      ...post,
-      author: profilesData?.find((p) => p.id === post.user_id),
-    }));
+    // 3. all likes + who's logged in (to count likes and mark mine)
+    const { data: likesData } = await supabase.from('likes').select('post_id, user_id');
+    const { data: { user } } = await supabase.auth.getUser();
+
+    // 4. attach profile, like count, and whether I liked it
+    const merged = (postsData || []).map((post) => {
+      const postLikes = (likesData || []).filter((l) => l.post_id === post.id);
+      return {
+        ...post,
+        author: profilesData?.find((p) => p.id === post.user_id),
+        likeCount: postLikes.length,
+        likedByMe: postLikes.some((l) => l.user_id === user?.id),
+      };
+    });
 
     setPosts(merged);
+  }
+
+  async function toggleLike(post: any) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    if (post.likedByMe) {
+      // unlike → remove my like row
+      await supabase.from('likes').delete().eq('post_id', post.id).eq('user_id', user.id);
+    } else {
+      // like → add a like row
+      await supabase.from('likes').insert({ post_id: post.id, user_id: user.id });
+    }
+    loadPosts();
   }
 
   // only show posts matching the active filter
@@ -106,6 +129,22 @@ export default function FeedScreen() {
         {/* Posts */}
         {visiblePosts.map((post) => {
           const name = `${post.author?.first_name || 'Boater'} ${post.author?.last_name || ''}`;
+
+          // build a details line that depends on the post type
+          const detailParts: string[] = [];
+          if (post.type === 'TRIP') {
+            if (post.duration_hours) detailParts.push(`⏱ ${post.duration_hours}h`);
+            if (post.distance_km) detailParts.push(`📍 ${post.distance_km} km`);
+            if (post.location) detailParts.push(post.location);
+            if (post.conditions) detailParts.push(post.conditions);
+          } else if (post.type === 'CATCH') {
+            if (post.species) detailParts.push(`🎣 ${post.species}`);
+            if (post.location) detailParts.push(post.location);
+          } else if (post.type === 'CHECK') {
+            if (post.location) detailParts.push(`📍 ${post.location}`);
+          }
+          const detail = detailParts.join('   ·   ');
+
           return (
             <View key={post.id} style={styles.card}>
               <View style={styles.cardHeader}>
@@ -122,10 +161,13 @@ export default function FeedScreen() {
                   <Text style={styles.badgeText}>{post.type}</Text>
                 </View>
               </View>
+              {detail ? <Text style={styles.postMeta}>{detail}</Text> : null}
               <Text style={styles.cardText}>{post.caption}</Text>
               {post.image_url && <Image source={{ uri: post.image_url }} style={styles.postImage} />}
-              <TouchableOpacity style={styles.anchorButton}>
-                <Text style={styles.anchorText}>⚓</Text>
+              <TouchableOpacity style={styles.anchorButton} onPress={() => toggleLike(post)}>
+                <Text style={[styles.anchorText, post.likedByMe && styles.anchorTextActive]}>
+                  ⚓ {post.likeCount}
+                </Text>
               </TouchableOpacity>
             </View>
           );
@@ -235,6 +277,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
+  postMeta: {
+    color: Colors.gold,
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
   cardText: {
     color: '#8899AA',
     fontSize: 14,
@@ -251,7 +299,12 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
   },
   anchorText: {
-    fontSize: 20,
+    fontSize: 16,
+    color: '#8899AA',
+    fontWeight: '600',
+  },
+  anchorTextActive: {
+    color: Colors.gold,
   },
 
   // floating action button
