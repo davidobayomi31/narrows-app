@@ -4,9 +4,8 @@ import { Colors } from '../constants/colors';
 import { useEffect, useState} from 'react';
 import { supabase} from '../lib/supabase';
 import { useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
-
-const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+import { Ionicons, MaterialCommunityIcons} from '@expo/vector-icons';
+import { getWeather, Weather} from '../lib/weather';
 
 export default function Homepage(){
   // shape of a marina row from the DB
@@ -17,10 +16,13 @@ export default function Homepage(){
     address: string | null;
     phone: string | null;
     amenities: string[] | null;
+    latitude: number | null;
+    longitude: number | null;
   };
 
   // holds the featured marina once it loads (null until then)
   const [marina, setMarina] = useState<Marina | null>(null);
+  const [weather, setWeather] = useState<Weather | null>(null);
   const navigation = useNavigation<any>();
 
     // load the featured marina once when the screen first appears
@@ -28,12 +30,16 @@ export default function Homepage(){
     async function loadMarina() {
       const { data, error } = await supabase
         .from('marinas')
-        .select('id, name, lake, address, phone, amenities')
+        .select('id, name, lake, address, phone, amenities, latitude, longitude')
         .eq('featured', true)
-        .single();          // we expect exactly one featured marina
+        .single();          // expect exactly one featured marina
 
       if (!error && data) {
         setMarina(data);
+        if (data.latitude != null && data.latitude != null){
+          const w = await getWeather(data.latitude, data.longitude);
+          setWeather(w);
+        }
       }
     }
     loadMarina();
@@ -83,38 +89,47 @@ export default function Homepage(){
           </View>
         )}
         
-        {/* Live Conditions */}
+                {/* Live Conditions */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Live Conditions</Text>
-          <View style={styles.conditionsGrid}>
-            <View style={styles.conditionCell}>
-              <Text style={styles.conditionValue}>12 km/h</Text>
-              <Text style={styles.conditionLabel}>Wind</Text>
+          {weather ? (
+            <View style={styles.conditionsGrid}>
+              <View style={styles.conditionCell}>
+                <Text style={styles.conditionValue}>{weather.windSpeed} km/h</Text>
+                <Text style={styles.conditionLabel}>Wind · gust {weather.windGust}</Text>
+              </View>
+              <View style={styles.conditionCell}>
+                <Text style={styles.conditionValue}>{weather.temp}°C</Text>
+                <Text style={styles.conditionLabel}>Temp · {weather.precipitation}mm</Text>
+              </View>
+              <View style={styles.conditionCell}>
+                <Text style={styles.conditionValue}>{weather.humidity}%</Text>
+                <Text style={styles.conditionLabel}>Humidity</Text>
+              </View>
+              <View style={styles.conditionCell}>
+                <Text style={styles.conditionValue}>{weather.sunrise}</Text>
+                <Text style={styles.conditionLabel}>Sunrise</Text>
+              </View>
             </View>
-            <View style={styles.conditionCell}>
-              <Text style={styles.conditionValue}>18°C</Text>
-              <Text style={styles.conditionLabel}>Water Temp</Text>
-            </View>
-            <View style={styles.conditionCell}>
-              <Text style={styles.conditionValue}>Rising</Text>
-              <Text style={styles.conditionLabel}>Tide</Text>
-            </View>
-            <View style={styles.conditionCell}>
-              <Text style={styles.conditionValue}>6:02 AM</Text>
-              <Text style={styles.conditionLabel}>Sunrise</Text>
-            </View>
-          </View>
+          ) : (
+            <Text style={styles.conditionLabel}>Loading conditions…</Text>
+          )}
         </View>
 
-        {/* This Week at the Dock */}
+                {/* This Week at the Dock */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>This Week at the Dock</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.weekScroll}>
-            {DAYS.map((day) => (
-              <View key={day} style={styles.dayCard}>
-                <Text style={styles.dayLabel}>{day}</Text>
-                <Text style={styles.dayCondition}>⛵</Text>
-                <Text style={styles.dayTemp}>21°C</Text>
+            {(weather?.week ?? []).map((day, i) => (
+              <View key={i} style={styles.dayCard}>
+                <Text style={styles.dayLabel}>{day.label}</Text>
+                <MaterialCommunityIcons
+                  name={day.icon as any}
+                  size={24}
+                  color={Colors.gold}
+                  style={styles.dayCondition}
+                />
+                <Text style={styles.dayTemp}>{day.high}°C</Text>
               </View>
             ))}
           </ScrollView>
