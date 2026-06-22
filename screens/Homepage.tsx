@@ -1,9 +1,10 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity,Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 import { useEffect, useState} from 'react';
 import { supabase} from '../lib/supabase';
 import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -49,7 +50,7 @@ export default function Homepage(){
             style={styles.marinaDropdown}
             onPress={() => navigation.navigate('Explore')}
           >
-          <Image source={require('../assets/explore.png')} style={styles.exploreIcon} />
+            <Ionicons name="search" size={20} color={Colors.gold} />
           </TouchableOpacity>
 
         </View>
@@ -289,9 +290,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
-    exploreIcon: {
-    width: 22,
-    height: 22,
-    resizeMode: 'contain',
-  },
+    
 });
