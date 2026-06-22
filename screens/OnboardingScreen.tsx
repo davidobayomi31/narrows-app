@@ -1,8 +1,10 @@
-import { View, Text, StyleSheet,TouchableOpacity,SafeAreaView, } from 'react-native';
+import { View, Text, StyleSheet,TouchableOpacity,Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {useState} from 'react';
 import {useNavigation} from '@react-navigation/native';
 import {Colors} from '../constants/colors';
 import {supabase} from '../lib/supabase';
+import { friendlyError } from '../lib/errors';
 
 export default function OnboardingScreen(){
     const navigation = useNavigation <any>();
@@ -29,7 +31,7 @@ export default function OnboardingScreen(){
             experience_level: exprience,
         });
         if (error){
-            alert(error.message);
+            Alert.alert('Could not save', friendlyError(error));
         }
 
     }

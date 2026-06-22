@@ -1,10 +1,12 @@
 import {View, Text, StyleSheet, Image,TouchableOpacity,
-  TextInput, KeyboardAvoidingView, Platform, ScrollView, SafeAreaView } from 'react-native';
+  TextInput, KeyboardAvoidingView, Platform, ScrollView, Alert,  } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState } from 'react';
 import { Colors } from '../constants/colors';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useNavigation } from '@react-navigation/native';
 import {supabase}  from '../lib/supabase';
+import { friendlyError } from '../lib/errors'
 
 export default function LoginScreen() {
   // tracks what the user types in each field
@@ -45,7 +47,7 @@ export default function LoginScreen() {
         password,
       });
       if (error){
-        alert(error.message);
+        Alert.alert('Login failed', friendlyError(error));
       } else {
         navigation.navigate('Home');
       }
@@ -148,7 +150,7 @@ async function handlesBiometricLogin()  {
   const isEnrolled = await LocalAuthentication.isEnrolledAsync();
 
   if (!hasHardware || !isEnrolled){
-    alert('Biometric Authentication is not available on this device');
+    Alert.alert('Biometric Authentication is not available on this device');
     return
   }
 

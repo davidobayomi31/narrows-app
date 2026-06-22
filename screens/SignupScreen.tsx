@@ -8,12 +8,14 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  SafeAreaView,
+  Alert,
 } from 'react-native';
 import { useState } from 'react';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
+import { friendlyError } from '../lib/errors';
 
 
 export default function SignupScreen() {
@@ -87,7 +89,7 @@ if (lastName.trim().length < 1) {
             },
         });
         if(error) {
-            alert(error.message);
+            Alert.alert("Sign up failed", friendlyError(error));
         } else {
             // navigate to onboarding after successful signup
             navigation.navigate('ConfirmEmail', {email});

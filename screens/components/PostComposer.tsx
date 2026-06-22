@@ -16,6 +16,7 @@ import { useState, useEffect } from 'react';
 import { Colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
 import * as ImagePicker from 'expo-image-picker';
+import { friendlyError } from '../../lib/errors';
 
 const LOG_TYPES = ['Trip', 'Catch', 'Check-in'];
 const CONDITIONS = ['GREAT', 'MIXED', 'ROUGH'];
@@ -103,7 +104,7 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost }:
   async function takePhoto() {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) {
-      alert('Camera permission is needed to take a photo');
+      Alert.alert('Permition needed.', 'Camera permission is needed to take a photo');
       return;
     }
     const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
@@ -133,7 +134,7 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost }:
       .upload(path, arraybuffer, { contentType });
 
     if (error) {
-      alert(error.message);
+      Alert.alert('upload failed', friendlyError(error));
       return null;
     }
     const { data } = supabase.storage.from('post-images').getPublicUrl(path);
@@ -145,7 +146,7 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost }:
     if (!user) return;
 
     if (caption.trim().length === 0) {
-      alert('Add a caption before posting');
+        Alert.alert('Add a caption', 'Please write a caption before posting.');
       return;
     }
 
@@ -179,7 +180,7 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost }:
     }
 
     if (error) {
-      alert(error.message);
+      Alert.alert('Could not post', friendlyError(error));
     } else {
       onSaved();
       onClose();
