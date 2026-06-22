@@ -1,10 +1,43 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity,Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
+import { useEffect, useState} from 'react';
+import { supabase} from '../lib/supabase';
+import { useNavigation } from '@react-navigation/native';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-export default function Homepage() {
+export default function Homepage(){
+  // shape of a marina row from the DB
+  type Marina = {
+    id: string;
+    name: string;
+    lake: string | null;
+    address: string | null;
+    phone: string | null;
+    amenities: string[] | null;
+  };
+
+  // holds the featured marina once it loads (null until then)
+  const [marina, setMarina] = useState<Marina | null>(null);
+  const navigation = useNavigation<any>();
+
+    // load the featured marina once when the screen first appears
+  useEffect(() => {
+    async function loadMarina() {
+      const { data, error } = await supabase
+        .from('marinas')
+        .select('id, name, lake, address, phone, amenities')
+        .eq('featured', true)
+        .single();          // we expect exactly one featured marina
+
+      if (!error && data) {
+        setMarina(data);
+      }
+    }
+    loadMarina();
+  }, []);   // empty array = run once on mount
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -12,9 +45,13 @@ export default function Homepage() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>NARROWS</Text>
-          <TouchableOpacity style={styles.marinaDropdown}>
-            <Text style={styles.marinaDropdownText}>Lake Couchiching ▼</Text>
+          <TouchableOpacity 
+            style={styles.marinaDropdown}
+            onPress={() => navigation.navigate('Explore')}
+          >
+          <Image source={require('../assets/explore.png')} style={styles.exploreIcon} />
           </TouchableOpacity>
+
         </View>
 
         {/* Alert Banner */}
@@ -22,27 +59,29 @@ export default function Homepage() {
           <Text style={styles.alertText}>⚠ Low water levels near Narrows Channel</Text>
         </View>
 
-        {/* Featured Marina Card */}
-        <View style={styles.card}>
-          <Text style={styles.featuredLabel}> Featured</Text>
-          <Text style={styles.marinaName}>Blue Beacon Marina</Text>
-          <Text style={styles.marinaDetail}> Lake Couchiching</Text>
-          <Text style={styles.marinaDetail}> 693 Atherley Rd, Orillia</Text>
-          <Text style={styles.marinaDetail}>  705-325-2526</Text>
+                {/* Featured Marina Card */}
+        {marina && (
+          <View style={styles.card}>
+            <Text style={styles.featuredLabel}> Featured</Text>
+            <Text style={styles.marinaName}>{marina.name}</Text>
+            {marina.lake && <Text style={styles.marinaDetail}> {marina.lake}</Text>}
+            {marina.address && <Text style={styles.marinaDetail}> {marina.address}</Text>}
+            {marina.phone && <Text style={styles.marinaDetail}>  {marina.phone}</Text>}
 
-          <View style={styles.tagRow}>
-            {['Gas', 'Pump-Out', 'Hydro', 'Mechanic'].map((tag) => (
-              <View key={tag} style={styles.tag}>
-                <Text style={styles.tagText}>{tag}</Text>
-              </View>
-            ))}
+            <View style={styles.tagRow}>
+              {(marina.amenities ?? []).map((tag) => (
+                <View key={tag} style={styles.tag}>
+                  <Text style={styles.tagText}>{tag}</Text>
+                </View>
+              ))}
+            </View>
+
+            <TouchableOpacity style={styles.directionsButton}>
+              <Text style={styles.directionsButtonText}>🧭  Get Directions</Text>
+            </TouchableOpacity>
           </View>
-
-          <TouchableOpacity style={styles.directionsButton}>
-            <Text style={styles.directionsButtonText}>🧭  Get Directions</Text>
-          </TouchableOpacity>
-        </View>
-
+        )}
+        
         {/* Live Conditions */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Live Conditions</Text>
@@ -80,9 +119,11 @@ export default function Homepage() {
           </ScrollView>
         </View>
 
+
       </ScrollView>
     </SafeAreaView>
   );
+
 }
 
 const styles = StyleSheet.create({
@@ -247,5 +288,10 @@ const styles = StyleSheet.create({
     color: Colors.cream,
     fontSize: 13,
     fontWeight: '600',
+  },
+    exploreIcon: {
+    width: 22,
+    height: 22,
+    resizeMode: 'contain',
   },
 });

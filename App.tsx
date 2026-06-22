@@ -7,6 +7,8 @@ import SplashScreen from './screens/SplashScreen';
 import SignupScreen from './screens/SignupScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
 import ConfirmEmailScreen from './screens/ConfirmEmailScreen';
+import ExploreScreen from './screens/ExploreScreen';
+import { Colors } from './constants/colors';
 
 const Stack = createNativeStackNavigator();
 
@@ -23,6 +25,17 @@ export default function App(){
         <Stack.Screen name='Home' component={MainTabs} />
         <Stack.Screen name='Onboarding' component={OnboardingScreen} />
         <Stack.Screen name='ConfirmEmail' component={ConfirmEmailScreen} />
+        <Stack.Screen
+          name ='Explore'
+          component={ExploreScreen}
+          options={{
+            headerShown: true,
+            title: 'Explore',
+            headerStyle: { backgroundColor: Colors.background },
+            headerTintColor: Colors.cream,
+          }}
+
+         />
       </Stack.Navigator>
     </NavigationContainer>
   );
