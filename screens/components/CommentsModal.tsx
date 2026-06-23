@@ -12,6 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useState, useEffect } from 'react';
 import { Colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
@@ -37,6 +38,7 @@ export default function CommentsModal({ visible, postId, onClose, onCommentAdded
   const [comments, setComments] = useState<any[]>([]);
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
+  const insets = useSafeAreaInsets(); // bottom inset so the input clears the home bar
 
   useEffect(() => {
     if (visible && postId) {
@@ -97,7 +99,7 @@ export default function CommentsModal({ visible, postId, onClose, onCommentAdded
 
         {/* the sheet — only covers the lower part of the screen */}
         <KeyboardAvoidingView
-          style={styles.sheet}
+          style={[styles.sheet, { paddingBottom: insets.bottom + 12 }]}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <View style={styles.handle} />
@@ -160,7 +162,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '80%',
-    paddingBottom: 16,
     borderTopWidth: 1,
     borderColor: '#1E1E1E',
   },
