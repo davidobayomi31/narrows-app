@@ -11,6 +11,7 @@ import { useState, useEffect } from 'react';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
 import PostComposer from './components/PostComposer';
+import CommentsModal from './components/CommentsModal';
 
 const FILTER = ['All', 'Trips', 'Catches', 'Check-ins'];
 
@@ -48,6 +49,7 @@ export default function FeedScreen() {
   const [activeFilter, setActiveFilter] = useState('All');
   const [posts, setPosts] = useState<any[]>([]);
   const [showComposer, setShowComposer] = useState(false);
+  const [commentsPostId, setCommentsPostId] = useState<string | null>(null);
 
   useEffect(() => {
     loadPosts();
@@ -72,16 +74,18 @@ export default function FeedScreen() {
 
     // 3. all likes + who's logged in (to count likes and mark mine)
     const { data: likesData } = await supabase.from('likes').select('post_id, user_id');
+    const { data: commentsData } = await supabase.from('comments').select('post_id');
     const { data: { user } } = await supabase.auth.getUser();
 
     // 4. attach profile, like count, and whether I liked it
     const merged = (postsData || []).map((post) => {
       const postLikes = (likesData || []).filter((l) => l.post_id === post.id);
-      return {
+      return { 
         ...post,
         author: profilesData?.find((p) => p.id === post.user_id),
         likeCount: postLikes.length,
         likedByMe: postLikes.some((l) => l.user_id === user?.id),
+        commentCount: (commentsData || []).filter((c) => c.post_id === post.id).length,
       };
     });
 
@@ -164,11 +168,16 @@ export default function FeedScreen() {
               {detail ? <Text style={styles.postMeta}>{detail}</Text> : null}
               <Text style={styles.cardText}>{post.caption}</Text>
               {post.image_url && <Image source={{ uri: post.image_url }} style={styles.postImage} />}
-              <TouchableOpacity style={styles.anchorButton} onPress={() => toggleLike(post)}>
-                <Text style={[styles.anchorText, post.likedByMe && styles.anchorTextActive]}>
-                  ⚓ {post.likeCount}
-                </Text>
-              </TouchableOpacity>
+              <View style={styles.cardFooter}>
+                <TouchableOpacity onPress={() => setCommentsPostId(post.id)}>
+                  <Text style={styles.anchorText}>💬 {post.commentCount}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => toggleLike(post)}>
+                  <Text style={[styles.anchorText, post.likedByMe && styles.anchorTextActive]}>
+                    ⚓ {post.likeCount}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           );
         })}
@@ -184,6 +193,12 @@ export default function FeedScreen() {
         visible={showComposer}
         onClose={() => setShowComposer(false)}
         onSaved={loadPosts}
+      />
+      <CommentsModal
+        visible={commentsPostId !== null}
+        postId={commentsPostId}
+        onClose={() => setCommentsPostId(null)}
+        onCommentAdded={loadPosts}
       />
     </SafeAreaView>
   );
@@ -330,4 +345,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: -2,
   },
+    cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 16,
+  },
+  
 });
