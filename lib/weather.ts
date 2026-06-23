@@ -17,6 +17,9 @@ export type Weather = {
   precipitation: number; // mm
   humidity: number;      // %
   sunrise: string;       // '6:02 AM'
+  windDirection: number; // degrees the wind is coming FROM (0=N, 90=E …)
+  feelsLike: number;     // °C apparent temperature
+  uvIndex: number;       // 0–11+
   week: WeatherDay[];     // 7 days
 };
 
@@ -61,7 +64,7 @@ export async function getWeather(lat: number, lng: number): Promise<Weather | nu
 
   const url =
     `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}` +
-    `&current=temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m,wind_gusts_10m` +
+    `&current=temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m,wind_gusts_10m,wind_direction_10m,apparent_temperature,uv_index` +
     `&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise` +
     `&timezone=auto&forecast_days=7`;
 
@@ -77,6 +80,9 @@ export async function getWeather(lat: number, lng: number): Promise<Weather | nu
       precipitation: json.current.precipitation,
       humidity: Math.round(json.current.relative_humidity_2m),
       sunrise: formatTime(json.daily.sunrise[0]), // today's sunrise
+      windDirection: Math.round(json.current.wind_direction_10m),
+      feelsLike: Math.round(json.current.apparent_temperature),
+      uvIndex: Math.round(json.current.uv_index),
       week: json.daily.time.map((date: string, i: number) => ({
         label: dayLabel(date),
         icon: codeToIcon(json.daily.weather_code[i]),

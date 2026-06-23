@@ -6,7 +6,22 @@ import { supabase} from '../lib/supabase';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons} from '@expo/vector-icons';
 import { getWeather, Weather} from '../lib/weather';
+import WindCompass from './components/WindCompass';
 
+// 322 -> 'NW'
+function degToCompass(deg: number) {
+  const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  return dirs[Math.round(deg / 45) % 8];
+}
+
+// UV number -> risk label
+function uvLabel(uv: number) {
+  if (uv <= 2) return 'Low';
+  if (uv <= 5) return 'Moderate';
+  if (uv <= 7) return 'High';
+  if (uv <= 10) return 'Very High';
+  return 'Extreme';
+}
 export default function Homepage(){
   // shape of a marina row from the DB
   type Marina = {
@@ -89,32 +104,74 @@ export default function Homepage(){
           </View>
         )}
         
-                {/* Live Conditions */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Live Conditions</Text>
-          {weather ? (
-            <View style={styles.conditionsGrid}>
-              <View style={styles.conditionCell}>
-                <Text style={styles.conditionValue}>{weather.windSpeed} km/h</Text>
-                <Text style={styles.conditionLabel}>Wind · gust {weather.windGust}</Text>
+         {/* Weather */}
+        {weather ? (
+          <>
+            {/* Feels like + UV */}
+            <View style={styles.weatherRow}>
+              <View style={[styles.card, styles.halfCard]}>
+                <Text style={styles.miniLabel}>FEELS LIKE</Text>
+                <Text style={styles.bigValue}>{weather.feelsLike}°</Text>
+                <Text style={styles.miniSub}>Actual: {weather.temp}°</Text>
               </View>
-              <View style={styles.conditionCell}>
-                <Text style={styles.conditionValue}>{weather.temp}°C</Text>
-                <Text style={styles.conditionLabel}>Temp · {weather.precipitation}mm</Text>
-              </View>
-              <View style={styles.conditionCell}>
-                <Text style={styles.conditionValue}>{weather.humidity}%</Text>
-                <Text style={styles.conditionLabel}>Humidity</Text>
-              </View>
-              <View style={styles.conditionCell}>
-                <Text style={styles.conditionValue}>{weather.sunrise}</Text>
-                <Text style={styles.conditionLabel}>Sunrise</Text>
+              <View style={[styles.card, styles.halfCard]}>
+                <Text style={styles.miniLabel}>UV INDEX</Text>
+                <Text style={styles.bigValue}>{weather.uvIndex}</Text>
+                <Text style={styles.miniSub}>{uvLabel(weather.uvIndex)}</Text>
               </View>
             </View>
-          ) : (
+
+            {/* Wind + compass */}
+            <View style={styles.card}>
+              <Text style={styles.miniLabel}>WIND</Text>
+              <View style={styles.windRow}>
+                <View style={styles.windStats}>
+                  <View style={styles.windStatRow}>
+                    <Text style={styles.windStatLabel}>Wind</Text>
+                    <Text style={styles.windStatValue}>{weather.windSpeed} km/h</Text>
+                  </View>
+                  <View style={styles.windStatRow}>
+                    <Text style={styles.windStatLabel}>Gusts</Text>
+                    <Text style={styles.windStatValue}>{weather.windGust} km/h</Text>
+                  </View>
+                  <View style={styles.windStatRow}>
+                    <Text style={styles.windStatLabel}>Direction</Text>
+                    <Text style={styles.windStatValue}>
+                      {weather.windDirection}° {degToCompass(weather.windDirection)}
+                    </Text>
+                  </View>
+                </View>
+                <WindCompass windSpeed={weather.windSpeed} windDirection={weather.windDirection} />
+              </View>
+            </View>
+
+            {/* Other conditions */}
+            <View style={styles.card}>
+              <View style={styles.conditionsGrid}>
+                <View style={styles.conditionCell}>
+                  <Text style={styles.conditionValue}>{weather.humidity}%</Text>
+                  <Text style={styles.conditionLabel}>Humidity</Text>
+                </View>
+                <View style={styles.conditionCell}>
+                  <Text style={styles.conditionValue}>{weather.precipitation}mm</Text>
+                  <Text style={styles.conditionLabel}>Precipitation</Text>
+                </View>
+                <View style={styles.conditionCell}>
+                  <Text style={styles.conditionValue}>{weather.sunrise}</Text>
+                  <Text style={styles.conditionLabel}>Sunrise</Text>
+                </View>
+                <View style={styles.conditionCell}>
+                  <Text style={styles.conditionValue}>{weather.temp}°C</Text>
+                  <Text style={styles.conditionLabel}>Temp</Text>
+                </View>
+              </View>
+            </View>
+          </>
+        ) : (
+          <View style={styles.card}>
             <Text style={styles.conditionLabel}>Loading conditions…</Text>
-          )}
-        </View>
+          </View>
+        )}
 
                 {/* This Week at the Dock */}
         <View style={styles.card}>
@@ -304,6 +361,54 @@ const styles = StyleSheet.create({
     color: Colors.cream,
     fontSize: 13,
     fontWeight: '600',
+  },
+    weatherRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  halfCard: {
+    flex: 1,
+  },
+  miniLabel: {
+    color: '#8899AA',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1,
+    marginBottom: 8,
+  },
+  bigValue: {
+    color: Colors.cream,
+    fontSize: 34,
+    fontWeight: '700',
+  },
+  miniSub: {
+    color: '#8899AA',
+    fontSize: 13,
+    marginTop: 2,
+  },
+  windRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  windStats: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  windStatRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1E1E1E',
+  },
+  windStatLabel: {
+    color: Colors.cream,
+    fontSize: 15,
+  },
+  windStatValue: {
+    color: '#8899AA',
+    fontSize: 15,
   },
     
 });
