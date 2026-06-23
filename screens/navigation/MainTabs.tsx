@@ -1,5 +1,6 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { Colors } from '../../constants/colors';
 import Homepage from '../Homepage';
 import FeedScreen from '../FeedScreen';
@@ -14,29 +15,34 @@ export default function MainTabs() {
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: Colors.gold,
-        tabBarInactiveTintColor: '#7A8694',
+        tabBarInactiveTintColor: '#8E8E93',
         tabBarHideOnKeyboard: true,
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
-        // floating pill, detached from the bottom edge (Uber-style)
+        // frosted background: the page blurs THROUGH the bar (Uber/Wealthsimple look)
+        tabBarBackground: () => (
+          <BlurView
+            intensity={40}
+            tint="dark"
+            style={{ flex: 1, borderRadius: 28, overflow: 'hidden' }}
+          />
+        ),
+        // floating pill, detached from the bottom edge, translucent
         tabBarStyle: {
           position: 'absolute',
-          left: 16,
-          right: 16,
-          bottom: 24,
-          height: 64,
+          left: 20,
+          right: 20,
+          bottom: 28,
+          height: 62,
           borderRadius: 28,
-          backgroundColor: Colors.surface,
+          backgroundColor: 'rgba(28,28,30,0.55)', // tint under the blur; semi-transparent
           borderTopWidth: 0,
           borderWidth: 1,
-          borderColor: Colors.border,
+          borderColor: 'rgba(255,255,255,0.08)',
           paddingHorizontal: 8,
           paddingTop: 8,
           paddingBottom: 8,
-          shadowColor: '#000',
-          shadowOpacity: 0.4,
-          shadowRadius: 12,
-          shadowOffset: { width: 0, height: 6 },
-          elevation: 12,
+          overflow: 'hidden',
+          elevation: 0,
         },
       }}
     >

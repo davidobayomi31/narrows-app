@@ -247,18 +247,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     alignSelf: 'center',
     gap: 8,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: '#3A2E12',
+    backgroundColor: Colors.surfaceAlt,
     borderRadius: 24,
     paddingVertical: 10,
     paddingHorizontal: 16,
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 8,
   },
   alertText: {
     color: Colors.gold,
@@ -266,14 +259,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Cards
+  // Cards — borderless, the surface contrast does the work
   card: {
     backgroundColor: Colors.surface,
     borderRadius: 20,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    padding: 18,
+    marginBottom: 14,
   },
   featuredLabel: {
     color: Colors.gold,
@@ -288,7 +279,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   marinaDetail: {
-    color: '#8899AA',
+    color: Colors.muted,
     fontSize: 14,
     marginBottom: 4,
   },
@@ -302,14 +293,13 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   tag: {
-    borderWidth: 1,
-    borderColor: '#2E4057',
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
   tagText: {
-    color: '#8899AA',
+    color: Colors.cream,
     fontSize: 12,
   },
 
@@ -352,7 +342,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   conditionLabel: {
-    color: '#8899AA',
+    color: Colors.muted,
     fontSize: 13,
     marginTop: 2,
   },
@@ -362,15 +352,15 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   dayCard: {
-    backgroundColor: '#1A1A1A',
-    borderRadius: 10,
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: 14,
     padding: 12,
     alignItems: 'center',
     marginRight: 10,
     width: 64,
   },
   dayLabel: {
-    color: '#8899AA',
+    color: Colors.muted,
     fontSize: 12,
     marginBottom: 6,
   },
@@ -391,7 +381,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   miniLabel: {
-    color: '#8899AA',
+    color: Colors.muted,
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 1,
@@ -408,7 +398,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   miniSub: {
-    color: '#8899AA',
+    color: Colors.muted,
     fontSize: 13,
     marginTop: 2,
   },
@@ -426,14 +416,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#1E1E1E',
+    borderBottomColor: 'rgba(255,255,255,0.06)',
   },
   windStatLabel: {
     color: Colors.cream,
     fontSize: 15,
   },
   windStatValue: {
-    color: '#8899AA',
+    color: Colors.muted,
     fontSize: 15,
   },
     
