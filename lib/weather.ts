@@ -17,6 +17,7 @@ export type Weather = {
   precipitation: number; // mm
   humidity: number;      // %
   sunrise: string;       // '6:02 AM'
+  sunset: string;        // '8:54 PM'
   windDirection: number; // degrees the wind is coming FROM (0=N, 90=E …)
   feelsLike: number;     // °C apparent temperature
   uvIndex: number;       // 0–11+
@@ -65,7 +66,7 @@ export async function getWeather(lat: number, lng: number): Promise<Weather | nu
   const url =
     `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}` +
     `&current=temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m,wind_gusts_10m,wind_direction_10m,apparent_temperature,uv_index` +
-    `&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise` +
+    `&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset` +
     `&timezone=auto&forecast_days=7`;
 
   try {
@@ -80,6 +81,7 @@ export async function getWeather(lat: number, lng: number): Promise<Weather | nu
       precipitation: json.current.precipitation,
       humidity: Math.round(json.current.relative_humidity_2m),
       sunrise: formatTime(json.daily.sunrise[0]), // today's sunrise
+      sunset: formatTime(json.daily.sunset[0]),   // today's sunset
       windDirection: Math.round(json.current.wind_direction_10m),
       feelsLike: Math.round(json.current.apparent_temperature),
       uvIndex: Math.round(json.current.uv_index),

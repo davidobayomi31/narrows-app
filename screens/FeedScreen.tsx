@@ -225,7 +225,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 96,
+    paddingBottom: 150,
   },
 
   // filter tabs
@@ -330,7 +330,7 @@ const styles = StyleSheet.create({
   // floating action button
   fab: {
     position: 'absolute',
-    bottom: 24,
+    bottom: 104,
     alignSelf: 'center',
     width: 60,
     height: 60,

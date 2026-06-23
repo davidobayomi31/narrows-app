@@ -76,9 +76,10 @@ export default function Homepage(){
 
         </View>
 
-        {/* Alert Banner */}
+        {/* Alert Banner — floating pill */}
         <View style={styles.alertBanner}>
-          <Text style={styles.alertText}>⚠ Low water levels near Narrows Channel</Text>
+          <Ionicons name="warning-outline" size={16} color={Colors.gold} />
+          <Text style={styles.alertText}>Low water levels near Narrows Channel</Text>
         </View>
 
                 {/* Featured Marina Card */}
@@ -98,8 +99,12 @@ export default function Homepage(){
               ))}
             </View>
 
-            <TouchableOpacity style={styles.directionsButton}>
-              <Text style={styles.directionsButtonText}>🧭  Get Directions</Text>
+            <TouchableOpacity
+              style={styles.directionsButton}
+              onPress={() => navigation.navigate('Map')}
+            >
+              <Ionicons name="navigate" size={16} color={Colors.black} />
+              <Text style={styles.directionsButtonText}>Get Directions</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -135,9 +140,9 @@ export default function Homepage(){
                     <Text style={styles.windStatValue}>{weather.windGust} km/h</Text>
                   </View>
                   <View style={styles.windStatRow}>
-                    <Text style={styles.windStatLabel}>Direction</Text>
+                    <Text style={styles.windStatLabel}>Heading towards</Text>
                     <Text style={styles.windStatValue}>
-                      {weather.windDirection}° {degToCompass(weather.windDirection)}
+                      {(weather.windDirection + 180) % 360}° {degToCompass((weather.windDirection + 180) % 360)}
                     </Text>
                   </View>
                 </View>
@@ -145,25 +150,27 @@ export default function Homepage(){
               </View>
             </View>
 
-            {/* Other conditions */}
-            <View style={styles.card}>
-              <View style={styles.conditionsGrid}>
-                <View style={styles.conditionCell}>
-                  <Text style={styles.conditionValue}>{weather.humidity}%</Text>
-                  <Text style={styles.conditionLabel}>Humidity</Text>
-                </View>
-                <View style={styles.conditionCell}>
-                  <Text style={styles.conditionValue}>{weather.precipitation}mm</Text>
-                  <Text style={styles.conditionLabel}>Precipitation</Text>
-                </View>
-                <View style={styles.conditionCell}>
-                  <Text style={styles.conditionValue}>{weather.sunrise}</Text>
-                  <Text style={styles.conditionLabel}>Sunrise</Text>
-                </View>
-                <View style={styles.conditionCell}>
-                  <Text style={styles.conditionValue}>{weather.temp}°C</Text>
-                  <Text style={styles.conditionLabel}>Temp</Text>
-                </View>
+            {/* Humidity + Precipitation */}
+            <View style={styles.weatherRow}>
+              <View style={[styles.card, styles.halfCard]}>
+                <Text style={styles.miniLabel}>HUMIDITY</Text>
+                <Text style={styles.boxValue}>{weather.humidity}%</Text>
+              </View>
+              <View style={[styles.card, styles.halfCard]}>
+                <Text style={styles.miniLabel}>PRECIPITATION</Text>
+                <Text style={styles.boxValue}>{weather.precipitation}mm</Text>
+              </View>
+            </View>
+
+            {/* Sunrise + Sunset */}
+            <View style={styles.weatherRow}>
+              <View style={[styles.card, styles.halfCard]}>
+                <Text style={styles.miniLabel}>SUNRISE</Text>
+                <Text style={styles.boxValue}>{weather.sunrise}</Text>
+              </View>
+              <View style={[styles.card, styles.halfCard]}>
+                <Text style={styles.miniLabel}>SUNSET</Text>
+                <Text style={styles.boxValue}>{weather.sunset}</Text>
               </View>
             </View>
           </>
@@ -206,7 +213,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingBottom: 48,
+    paddingBottom: 120, // clear the floating tab bar
   },
 
   // Header
@@ -234,28 +241,39 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
 
-  // Alert
+  // Alert — floating pill
   alertBanner: {
-    backgroundColor: '#2A1F00',
-    borderLeftWidth: 3,
-    borderLeftColor: '#F0B429',
-    borderRadius: 8,
-    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    gap: 8,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: '#3A2E12',
+    borderRadius: 24,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
     marginBottom: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
   },
   alertText: {
-    color: '#F0B429',
+    color: Colors.gold,
     fontSize: 13,
+    fontWeight: '600',
   },
 
   // Cards
   card: {
-    backgroundColor: '#0F0F0F',
-    borderRadius: 16,
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#1E1E1E',
+    borderColor: Colors.border,
   },
   featuredLabel: {
     color: Colors.gold,
@@ -297,10 +315,13 @@ const styles = StyleSheet.create({
 
   // Directions button
   directionsButton: {
-    backgroundColor: Colors.gold,
-    borderRadius: 10,
-    padding: 12,
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
+    gap: 8,
+    backgroundColor: Colors.gold,
+    borderRadius: 14,
+    padding: 14,
   },
   directionsButtonText: {
     color: Colors.black,
@@ -379,6 +400,11 @@ const styles = StyleSheet.create({
   bigValue: {
     color: Colors.cream,
     fontSize: 34,
+    fontWeight: '700',
+  },
+  boxValue: {
+    color: Colors.cream,
+    fontSize: 26,
     fontWeight: '700',
   },
   miniSub: {
