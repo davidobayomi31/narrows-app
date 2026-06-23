@@ -5,9 +5,10 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
 import PostComposer from './components/PostComposer';
@@ -50,6 +51,16 @@ export default function FeedScreen() {
   const [posts, setPosts] = useState<any[]>([]);
   const [showComposer, setShowComposer] = useState(false);
   const [commentsPostId, setCommentsPostId] = useState<string | null>(null);
+    // remembers the last tap time per post, to detect a double-tap
+  const lastTap = useRef<Record<string, number>>({});
+
+  function handleDoubleTap(post: any) {
+    const now = Date.now();
+    if (now - (lastTap.current[post.id] || 0) < 300) {
+      if (!post.likedByMe) toggleLike(post); // double-tap likes (never unlikes)
+    }
+    lastTap.current[post.id] = now;
+  }
 
   useEffect(() => {
     loadPosts();
@@ -166,13 +177,15 @@ export default function FeedScreen() {
                 </View>
               </View>
               {detail ? <Text style={styles.postMeta}>{detail}</Text> : null}
-              <Text style={styles.cardText}>{post.caption}</Text>
-              {post.image_url && <Image source={{ uri: post.image_url }} style={styles.postImage} />}
+              <Pressable onPress={() => handleDoubleTap(post)}>
+                <Text style={styles.cardText}>{post.caption}</Text>
+                {post.image_url && <Image source={{ uri: post.image_url }} style={styles.postImage} />}
+              </Pressable>
               <View style={styles.cardFooter}>
-                <TouchableOpacity onPress={() => setCommentsPostId(post.id)}>
+                <TouchableOpacity style={styles.footerButton} hitSlop={10} onPress={() => setCommentsPostId(post.id)}>
                   <Text style={styles.anchorText}>💬 {post.commentCount}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => toggleLike(post)}>
+                <TouchableOpacity style={styles.footerButton} hitSlop={10} onPress={() => toggleLike(post)}>
                   <Text style={[styles.anchorText, post.likedByMe && styles.anchorTextActive]}>
                     ⚓ {post.likeCount}
                   </Text>
@@ -310,14 +323,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 12,
   },
-  anchorButton: {
-    alignSelf: 'flex-end',
-  },
-  anchorText: {
-    fontSize: 16,
-    color: '#8899AA',
-    fontWeight: '600',
-  },
   anchorTextActive: {
     color: Colors.gold,
   },
@@ -345,11 +350,21 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: -2,
   },
-    cardFooter: {
+  cardFooter: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
     alignItems: 'center',
-    gap: 16,
+    gap: 4,
+    marginTop: 4,
+  },
+  footerButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+  anchorText: {
+    fontSize: 20,
+    color: '#8899AA',
+    fontWeight: '600',
   },
   
 });

@@ -8,9 +8,10 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useState, useEffect } from 'react';
 import { Colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
@@ -20,10 +21,9 @@ type Props = {
   visible: boolean;
   postId: string | null;
   onClose: () => void;
-  onCommentAdded: () => void; // lets the Feed refresh its 💬 count
+  onCommentAdded: () => void;
 };
 
-// "5m ago" helper (same logic as FeedScreen)
 function timeAgo(iso: string) {
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
   if (mins < 1) return 'just now';
@@ -38,7 +38,6 @@ export default function CommentsModal({ visible, postId, onClose, onCommentAdded
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
 
-  // load the thread whenever the modal opens for a post
   useEffect(() => {
     if (visible && postId) {
       loadComments();
@@ -46,14 +45,12 @@ export default function CommentsModal({ visible, postId, onClose, onCommentAdded
   }, [visible, postId]);
 
   async function loadComments() {
-    // comments for this post, oldest first
     const { data: commentsData } = await supabase
       .from('comments')
       .select('id, body, created_at, user_id')
       .eq('post_id', postId)
       .order('created_at', { ascending: true });
 
-    // author names (same JS-merge pattern as the Feed)
     const { data: profilesData } = await supabase
       .from('profiles')
       .select('id, first_name, last_name');
@@ -87,28 +84,36 @@ export default function CommentsModal({ visible, postId, onClose, onCommentAdded
       return;
     }
 
-    setBody('');        // clear the input
-    loadComments();     // refresh the thread
-    onCommentAdded();   // tell the Feed to update its count
+    setBody('');
+    loadComments();
+    onCommentAdded();
   }
 
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView style={styles.safeArea}>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      {/* dim background; tap the empty top area to close */}
+      <View style={styles.backdrop}>
+        <Pressable style={styles.spacer} onPress={onClose} />
+
+        {/* the sheet — only covers the lower part of the screen */}
         <KeyboardAvoidingView
-          style={styles.flex}
+          style={styles.sheet}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          {/* header */}
+          <View style={styles.handle} />
+
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Comments</Text>
-            <TouchableOpacity onPress={onClose}>
-              <Text style={styles.done}>Done</Text>
+            <TouchableOpacity onPress={onClose} hitSlop={12}>
+              <Ionicons name="close" size={26} color="#8899AA" />
             </TouchableOpacity>
           </View>
 
-          {/* thread */}
-          <ScrollView contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled">
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.list}
+            keyboardShouldPersistTaps="handled"
+          >
             {comments.length === 0 ? (
               <Text style={styles.empty}>No comments yet. Be the first.</Text>
             ) : (
@@ -124,7 +129,6 @@ export default function CommentsModal({ visible, postId, onClose, onCommentAdded
             )}
           </ScrollView>
 
-          {/* input */}
           <View style={styles.inputRow}>
             <TextInput
               style={styles.input}
@@ -139,25 +143,47 @@ export default function CommentsModal({ visible, postId, onClose, onCommentAdded
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
-      </SafeAreaView>
+      </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: Colors.background },
-  flex: { flex: 1 },
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  spacer: { flex: 1 },
+  sheet: {
+    backgroundColor: Colors.background,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '80%',
+    paddingBottom: 16,
+    borderTopWidth: 1,
+    borderColor: '#1E1E1E',
+  },
+  handle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#3A3A3A',
+    alignSelf: 'center',
+    marginTop: 10,
+    marginBottom: 2,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#1E1E1E',
   },
   headerTitle: { color: Colors.cream, fontSize: 18, fontWeight: '700' },
-  done: { color: Colors.gold, fontSize: 15, fontWeight: '600' },
+  scroll: { flexShrink: 1 },
   list: { padding: 16, paddingBottom: 24 },
   empty: { color: '#8899AA', fontSize: 14, textAlign: 'center', marginTop: 32 },
   comment: {
@@ -176,7 +202,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: 8,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: '#1E1E1E',
   },
