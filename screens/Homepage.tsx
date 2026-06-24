@@ -1,5 +1,7 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ImageBackground } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { Colors } from '../constants/colors';
 import { useEffect, useState} from 'react';
 import { supabase} from '../lib/supabase';
@@ -7,6 +9,15 @@ import { useNavigation } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons} from '@expo/vector-icons';
 import { getWeather, Weather} from '../lib/weather';
 import WindCompass from './components/WindCompass';
+
+// shown behind the marina name if a marina has no image_url yet
+const MARINA_FALLBACK = 'https://images.unsplash.com/photo-1545671913-b89ac1b4ac10?w=1200&q=80';
+
+// dark gradient over the marina photo so text stays readable
+const HERO_OVERLAY = ['rgba(0,0,0,0.25)', 'rgba(0,0,0,0.55)', 'rgba(0,0,0,0.92)'] as const;
+
+// the colorful Spotlight promo block
+const SPOTLIGHT_GRADIENT = ['#F7825F', '#C2A24E'] as const;
 
 // 322 -> 'NW'
 function degToCompass(deg: number) {
@@ -22,6 +33,31 @@ function uvLabel(uv: number) {
   if (uv <= 10) return 'Very High';
   return 'Extreme';
 }
+
+// weather icon -> a two-stop sky gradient (time-of-day / condition color)
+function skyGradient(icon: string): readonly [string, string] {
+  if (icon.includes('sunny')) return ['#3A7BD5', '#C2A24E'];
+  if (icon.includes('partly')) return ['#3A6073', '#16222A'];
+  if (icon.includes('pouring') || icon.includes('rainy')) return ['#283E51', '#4B79A1'];
+  if (icon.includes('lightning')) return ['#373B44', '#4286F4'];
+  if (icon.includes('snow')) return ['#83A4D4', '#3A4A5A'];
+  return ['#3A4A5A', '#1B2A3B'];
+}
+
+// weather icon -> plain-English condition
+function iconToText(icon: string) {
+  const map: Record<string, string> = {
+    'weather-sunny': 'Clear',
+    'weather-partly-cloudy': 'Partly cloudy',
+    'weather-cloudy': 'Cloudy',
+    'weather-fog': 'Foggy',
+    'weather-rainy': 'Light rain',
+    'weather-pouring': 'Rain',
+    'weather-snowy': 'Snow',
+    'weather-lightning': 'Thunderstorms',
+  };
+  return map[icon] ?? 'Cloudy';
+}
 export default function Homepage(){
   // shape of a marina row from the DB
   type Marina = {
@@ -33,19 +69,22 @@ export default function Homepage(){
     amenities: string[] | null;
     latitude: number | null;
     longitude: number | null;
+    image_url: string | null;
+    water_alert: string | null;
   };
 
   // holds the featured marina once it loads (null until then)
   const [marina, setMarina] = useState<Marina | null>(null);
   const [weather, setWeather] = useState<Weather | null>(null);
   const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets();
 
     // load the featured marina once when the screen first appears
   useEffect(() => {
     async function loadMarina() {
       const { data, error } = await supabase
         .from('marinas')
-        .select('id, name, lake, address, phone, amenities, latitude, longitude')
+        .select('id, name, lake, address, phone, amenities, latitude, longitude, image_url, water_alert')
         .eq('featured', true)
         .single();          // expect exactly one featured marina
 
@@ -61,72 +100,77 @@ export default function Homepage(){
   }, []);   // empty array = run once on mount
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>NARROWS</Text>
-          <TouchableOpacity 
-            style={styles.marinaDropdown}
-            onPress={() => navigation.navigate('Explore')}
-          >
-            <Ionicons name="search" size={20} color={Colors.gold} />
-          </TouchableOpacity>
-
-        </View>
-
-        {/* Alert Banner — floating pill */}
-        <View style={styles.alertBanner}>
-          <Ionicons name="warning-outline" size={16} color={Colors.gold} />
-          <Text style={styles.alertText}>Low water levels near Narrows Channel</Text>
-        </View>
-
-                {/* Featured Marina Card */}
-        {marina && (
-          <View style={styles.card}>
-            <Text style={styles.featuredLabel}> Featured</Text>
-            <Text style={styles.marinaName}>{marina.name}</Text>
-            {marina.lake && <Text style={styles.marinaDetail}> {marina.lake}</Text>}
-            {marina.address && <Text style={styles.marinaDetail}> {marina.address}</Text>}
-            {marina.phone && <Text style={styles.marinaDetail}>  {marina.phone}</Text>}
-
-            <View style={styles.tagRow}>
-              {(marina.amenities ?? []).map((tag) => (
-                <View key={tag} style={styles.tag}>
-                  <Text style={styles.tagText}>{tag}</Text>
-                </View>
-              ))}
-            </View>
-
-            <TouchableOpacity
-              style={styles.directionsButton}
-              onPress={() => navigation.navigate('Map')}
-            >
-              <Ionicons name="navigate" size={16} color={Colors.black} />
-              <Text style={styles.directionsButtonText}>Get Directions</Text>
-            </TouchableOpacity>
+    <View style={styles.root}>
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 46 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Water alert — only shows when a marina has an active alert */}
+        {marina?.water_alert ? (
+          <View style={styles.alertBanner}>
+            <Ionicons name="warning-outline" size={16} color={Colors.gold} />
+            <Text style={styles.alertText}>{marina.water_alert}</Text>
           </View>
+        ) : null}
+
+        {/* 1. Weather hero — at the top */}
+        {weather && (
+          <LinearGradient
+            colors={skyGradient(weather.week[0].icon)}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.weatherHero}
+          >
+            <View>
+              <Text style={styles.weatherHeroCond}>{iconToText(weather.week[0].icon)}</Text>
+              <Text style={styles.weatherHeroTemp}>{weather.temp}°</Text>
+              <Text style={styles.weatherHeroSub}>Feels like {weather.feelsLike}°</Text>
+            </View>
+            <MaterialCommunityIcons
+              name={weather.week[0].icon as any}
+              size={64}
+              color="rgba(255,255,255,0.92)"
+            />
+          </LinearGradient>
         )}
-        
-         {/* Weather */}
+
+        {/* 2. Featured Marina — full-bleed photo hero */}
+        {marina && (
+          <ImageBackground
+            source={{ uri: marina.image_url || MARINA_FALLBACK }}
+            style={styles.marinaHero}
+            imageStyle={styles.marinaHeroImage}
+          >
+            <LinearGradient colors={HERO_OVERLAY} style={StyleSheet.absoluteFill} />
+            <View style={styles.marinaHeroContent}>
+              <Text style={styles.featuredLabel}>FEATURED</Text>
+              <Text style={styles.marinaName}>{marina.name}</Text>
+              {marina.lake && <Text style={styles.marinaDetail}>{marina.lake}</Text>}
+              {marina.address && <Text style={styles.marinaDetail}>{marina.address}</Text>}
+              {marina.phone && <Text style={styles.marinaDetail}>{marina.phone}</Text>}
+
+              <View style={styles.tagRow}>
+                {(marina.amenities ?? []).map((tag) => (
+                  <View key={tag} style={styles.tag}>
+                    <Text style={styles.tagText}>{tag}</Text>
+                  </View>
+                ))}
+              </View>
+
+              <TouchableOpacity
+                style={styles.directionsButton}
+                onPress={() => navigation.navigate('Map')}
+              >
+                <Ionicons name="navigate" size={16} color={Colors.black} />
+                <Text style={styles.directionsButtonText}>Get Directions</Text>
+              </TouchableOpacity>
+            </View>
+          </ImageBackground>
+        )}
+
         {weather ? (
           <>
-            {/* Feels like + UV */}
-            <View style={styles.weatherRow}>
-              <View style={[styles.card, styles.halfCard]}>
-                <Text style={styles.miniLabel}>FEELS LIKE</Text>
-                <Text style={styles.bigValue}>{weather.feelsLike}°</Text>
-                <Text style={styles.miniSub}>Actual: {weather.temp}°</Text>
-              </View>
-              <View style={[styles.card, styles.halfCard]}>
-                <Text style={styles.miniLabel}>UV INDEX</Text>
-                <Text style={styles.bigValue}>{weather.uvIndex}</Text>
-                <Text style={styles.miniSub}>{uvLabel(weather.uvIndex)}</Text>
-              </View>
-            </View>
-
-            {/* Wind + compass */}
+            {/* 2. Wind + compass */}
             <View style={styles.card}>
               <Text style={styles.miniLabel}>WIND</Text>
               <View style={styles.windRow}>
@@ -150,28 +194,67 @@ export default function Homepage(){
               </View>
             </View>
 
-            {/* Humidity + Precipitation */}
-            <View style={styles.weatherRow}>
-              <View style={[styles.card, styles.halfCard]}>
-                <Text style={styles.miniLabel}>HUMIDITY</Text>
-                <Text style={styles.boxValue}>{weather.humidity}%</Text>
+            {/* 3. Spotlight — colorful promo block */}
+            <LinearGradient
+              colors={SPOTLIGHT_GRADIENT}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.spotlight}
+            >
+              <View style={styles.spotlightText}>
+                <Text style={styles.spotlightKicker}>SPOTLIGHT</Text>
+                <Text style={styles.spotlightTitle}>Summer on the water</Text>
+                <Text style={styles.spotlightSub}>Events, fuel deals & marina news all season.</Text>
+                <TouchableOpacity style={styles.spotlightBtn}>
+                  <Text style={styles.spotlightBtnText}>Explore</Text>
+                </TouchableOpacity>
               </View>
-              <View style={[styles.card, styles.halfCard]}>
-                <Text style={styles.miniLabel}>PRECIPITATION</Text>
-                <Text style={styles.boxValue}>{weather.precipitation}mm</Text>
+              <Ionicons name="boat" size={56} color="rgba(255,255,255,0.85)" />
+            </LinearGradient>
+
+            {/* 5. UV | Humidity (compact) */}
+            <View style={styles.weatherRow}>
+              <View style={styles.statCard}>
+                <Text style={styles.miniLabel}>UV INDEX</Text>
+                <Text style={styles.statValue}>{weather.uvIndex}</Text>
+                <Text style={styles.miniSub}>{uvLabel(weather.uvIndex)}</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={styles.miniLabel}>HUMIDITY</Text>
+                <Text style={styles.statValue}>{weather.humidity}%</Text>
               </View>
             </View>
 
-            {/* Sunrise + Sunset */}
-            <View style={styles.weatherRow}>
-              <View style={[styles.card, styles.halfCard]}>
+            {/* 6. Sunrise + Sunset — combined card */}
+            <View style={styles.sunCard}>
+              <View style={styles.sunHalf}>
                 <Text style={styles.miniLabel}>SUNRISE</Text>
-                <Text style={styles.boxValue}>{weather.sunrise}</Text>
+                <Text style={styles.statValue}>{weather.sunrise}</Text>
               </View>
-              <View style={[styles.card, styles.halfCard]}>
+              <View style={styles.sunDivider} />
+              <View style={styles.sunHalf}>
                 <Text style={styles.miniLabel}>SUNSET</Text>
-                <Text style={styles.boxValue}>{weather.sunset}</Text>
+                <Text style={styles.statValue}>{weather.sunset}</Text>
               </View>
+            </View>
+
+            {/* 6. This Week at the Dock */}
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>This Week at the Dock</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.weekScroll}>
+                {weather.week.map((day, i) => (
+                  <View key={i} style={styles.dayCard}>
+                    <Text style={styles.dayLabel}>{day.label}</Text>
+                    <MaterialCommunityIcons
+                      name={day.icon as any}
+                      size={24}
+                      color={Colors.gold}
+                      style={styles.dayCondition}
+                    />
+                    <Text style={styles.dayTemp}>{day.high}°C</Text>
+                  </View>
+                ))}
+              </ScrollView>
             </View>
           </>
         ) : (
@@ -179,34 +262,80 @@ export default function Homepage(){
             <Text style={styles.conditionLabel}>Loading conditions…</Text>
           </View>
         )}
-
-                {/* This Week at the Dock */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>This Week at the Dock</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.weekScroll}>
-            {(weather?.week ?? []).map((day, i) => (
-              <View key={i} style={styles.dayCard}>
-                <Text style={styles.dayLabel}>{day.label}</Text>
-                <MaterialCommunityIcons
-                  name={day.icon as any}
-                  size={24}
-                  color={Colors.gold}
-                  style={styles.dayCondition}
-                />
-                <Text style={styles.dayTemp}>{day.high}°C</Text>
-              </View>
-            ))}
-          </ScrollView>
-        </View>
-
-
       </ScrollView>
-    </SafeAreaView>
+
+      {/* Floating frosted header — stays put as you scroll */}
+      <View style={[styles.floatingHeader, { height: insets.top + 44, paddingTop: insets.top }]}>
+        <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
+        <View style={styles.headerInner}>
+          <Text style={styles.headerTitle}>NARROWS</Text>
+          <TouchableOpacity
+            style={styles.marinaDropdown}
+            onPress={() => navigation.navigate('Explore')}
+          >
+            <Ionicons name="search" size={20} color={Colors.gold} />
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
   );
 
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  // Floating frosted header
+  floatingHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    overflow: 'hidden',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+  },
+  headerInner: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+  },
+  // Compact stat tile
+  statCard: {
+    flex: 1,
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    padding: 16,
+  },
+  statValue: {
+    color: Colors.cream,
+    fontSize: 24,
+    fontWeight: '700',
+    marginTop: 6,
+  },
+  // Combined sunrise/sunset card
+  sunCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 14,
+  },
+  sunHalf: {
+    flex: 1,
+  },
+  sunDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    marginHorizontal: 8,
+  },
   safeArea: {
     flex: 1,
     backgroundColor: Colors.background,
@@ -266,20 +395,104 @@ const styles = StyleSheet.create({
     padding: 18,
     marginBottom: 14,
   },
+
+  // Marina photo hero
+  marinaHero: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    marginBottom: 14,
+    minHeight: 320,
+    justifyContent: 'flex-end',
+  },
+  marinaHeroImage: {
+    borderRadius: 20,
+  },
+  marinaHeroContent: {
+    padding: 18,
+  },
+
+  // Spotlight promo block
+  spotlight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 14,
+  },
+  spotlightText: {
+    flex: 1,
+  },
+  spotlightKicker: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    marginBottom: 6,
+  },
+  spotlightTitle: {
+    color: '#FFFFFF',
+    fontSize: 19,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  spotlightSub: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 13,
+    marginBottom: 12,
+  },
+  spotlightBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  spotlightBtnText: {
+    color: '#8A4A24',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+
+  // Weather gradient hero
+  weatherHero: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 14,
+  },
+  weatherHeroCond: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  weatherHeroTemp: {
+    color: '#FFFFFF',
+    fontSize: 52,
+    fontWeight: '700',
+    lineHeight: 56,
+  },
+  weatherHeroSub: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 13,
+  },
   featuredLabel: {
     color: Colors.gold,
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 1.5,
     marginBottom: 8,
   },
   marinaName: {
-    color: Colors.cream,
-    fontSize: 20,
+    color: '#FFFFFF',
+    fontSize: 26,
     fontWeight: 'bold',
     marginBottom: 8,
   },
   marinaDetail: {
-    color: Colors.muted,
+    color: 'rgba(255,255,255,0.82)',
     fontSize: 14,
     marginBottom: 4,
   },
@@ -376,6 +589,7 @@ const styles = StyleSheet.create({
     weatherRow: {
     flexDirection: 'row',
     gap: 12,
+    marginBottom: 14,
   },
   halfCard: {
     flex: 1,
