@@ -1,11 +1,11 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ImageBackground } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ImageBackground, Linking, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Colors } from '../constants/colors';
-import { useEffect, useState} from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { supabase} from '../lib/supabase';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons} from '@expo/vector-icons';
 import { getWeather, Weather} from '../lib/weather';
 import WindCompass from './components/WindCompass';
@@ -99,6 +99,35 @@ export default function Homepage(){
     loadMarina();
   }, []);   // empty array = run once on mount
 
+  // refresh weather whenever the Home tab regains focus, so it doesn't go stale
+  // (getWeather has a 15-min cache, so this won't hammer the API)
+  useFocusEffect(
+    useCallback(() => {
+      if (marina?.latitude != null && marina?.longitude != null) {
+        getWeather(marina.latitude, marina.longitude).then(setWeather);
+      }
+    }, [marina])
+  );
+
+  // open the user's chosen maps app, routed to the featured marina
+  function openDirections() {
+    if (marina?.latitude == null || marina?.longitude == null) return;
+    const { latitude: lat, longitude: lng, name } = marina;
+    Alert.alert('Get Directions', `Open directions to ${name}?`, [
+      {
+        text: 'Apple Maps',
+        onPress: () =>
+          Linking.openURL(`http://maps.apple.com/?daddr=${lat},${lng}&q=${encodeURIComponent(name)}`),
+      },
+      {
+        text: 'Google Maps',
+        onPress: () =>
+          Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`),
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }
+
   return (
     <View style={styles.root}>
       <ScrollView
@@ -157,10 +186,7 @@ export default function Homepage(){
                 ))}
               </View>
 
-              <TouchableOpacity
-                style={styles.directionsButton}
-                onPress={() => navigation.navigate('Map')}
-              >
+              <TouchableOpacity style={styles.directionsButton} onPress={openDirections}>
                 <Ionicons name="navigate" size={16} color={Colors.black} />
                 <Text style={styles.directionsButtonText}>Get Directions</Text>
               </TouchableOpacity>

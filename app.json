@@ -14,7 +14,8 @@
     },
     "ios": {
       "infoPlist": {
-        "NSFaceIDUsageDescription": "Narrows uses Face ID to sign you in quickly and securely."
+        "NSFaceIDUsageDescription": "Narrows uses Face ID to sign you in quickly and securely.",
+        "NSLocationWhenInUseUsageDescription": "Narrows uses your location to show your position on the water, drop catch pins, and track trips."
       },
       "supportsTablet": true
     },
