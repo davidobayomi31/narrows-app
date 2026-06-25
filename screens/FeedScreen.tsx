@@ -53,6 +53,7 @@ export default function FeedScreen() {
   const [commentsPostId, setCommentsPostId] = useState<string | null>(null);
     // remembers the last tap time per post, to detect a double-tap
   const lastTap = useRef<Record<string, number>>({});
+  const [refreshing, setRefreshing] = useState(false);
 
   function handleDoubleTap(post: any) {
     const now = Date.now();
@@ -77,6 +78,11 @@ export default function FeedScreen() {
       console.log(error.message);
       return;
     }
+  async function onRefresh() {
+    setRefreshing(true);
+    await loadPosts();
+    setRefreshing(false);
+  }
 
     // 2. all profiles (to get each author's name)
     const { data: profilesData } = await supabase
@@ -140,6 +146,10 @@ export default function FeedScreen() {
             </TouchableOpacity>
           ))}
         </View>
+
+        {visiblePosts.length === 0 && (
+          <Text style={styles.emptyText}>No posts yet — be the first to share your day on the water.</Text>
+        )}
 
         {/* Posts */}
         {visiblePosts.map((post) => {
@@ -238,15 +248,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#2E4057',
+    backgroundColor: Colors.surface,
   },
   filterTabActive: {
     backgroundColor: Colors.gold,
-    borderColor: Colors.gold,
   },
   filterText: {
-    color: '#8899AA',
+    color: Colors.muted,
     fontSize: 13,
   },
   filterTextActive: {
@@ -256,12 +264,10 @@ const styles = StyleSheet.create({
 
   // post cards
   card: {
-    backgroundColor: '#0F0F0F',
-    borderRadius: 16,
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
     padding: 16,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#1E1E1E',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -291,7 +297,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   cardSub: {
-    color: '#8899AA',
+    color: Colors.muted,
     fontSize: 12,
     marginTop: 2,
   },
@@ -312,15 +318,15 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   cardText: {
-    color: '#8899AA',
+    color: Colors.cream,
     fontSize: 14,
     lineHeight: 20,
     marginBottom: 12,
   },
   postImage: {
     width: '100%',
-    height: 200,
-    borderRadius: 12,
+    height: 260,
+    borderRadius: 14,
     marginBottom: 12,
   },
   anchorTextActive: {
@@ -363,8 +369,14 @@ const styles = StyleSheet.create({
   },
   anchorText: {
     fontSize: 20,
-    color: '#8899AA',
+    color: Colors.muted,
     fontWeight: '600',
+  },
+    emptyText: {
+    color: Colors.muted,
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 40,
   },
   
 });
