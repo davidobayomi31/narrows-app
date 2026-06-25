@@ -62,6 +62,7 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost }:
   const [released, setReleased] = useState(false);
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [viewImageUri, setViewImageUri] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   // fill the form when editing, reset it when creating
   useEffect(() => {
@@ -142,57 +143,67 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost }:
   }
 
   async function handleSave() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (saving) return; // guard against double-tap → double post
 
     if (caption.trim().length === 0) {
-        Alert.alert('Add a caption', 'Please write a caption before posting.');
+      Alert.alert('Add a caption', 'Please write a caption before posting.');
       return;
     }
 
-    // keep an existing remote url, upload a new local file, or store nothing
-    let image_url: string | null = null;
-    if (imageUri) {
-      image_url = imageUri.startsWith('http') ? imageUri : await uploadImage(imageUri);
-    }
+    setSaving(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-    const fields = {
-      type: TYPE_MAP[activeLog],
-      conditions: activeLog === 'Trip' ? activeCondition : null,
-      caption: caption,
-      location: location || null,
-      duration_hours: duration ? Number(duration) : null,
-      distance_km: distance ? Number(distance) : null,
-      species: species || null,
-      weight_lbs: weight ? Number(weight) : null,
-      length_in: length ? Number(length) : null,
-      released: activeLog === 'Catch' ? released : null,
-      image_url: image_url,
-    };
+      // keep an existing remote url, upload a new local file, or store nothing
+      let image_url: string | null = null;
+      if (imageUri) {
+        image_url = imageUri.startsWith('http') ? imageUri : await uploadImage(imageUri);
+      }
 
-    let error;
-    if (editingPost) {
-      // edit → update the existing row
-      ({ error } = await supabase.from('posts').update(fields).eq('id', editingPost.id));
-    } else {
-      // create → insert a new row stamped with this user
-      ({ error } = await supabase.from('posts').insert({ ...fields, user_id: user.id }));
-    }
+      const fields = {
+        type: TYPE_MAP[activeLog],
+        conditions: activeLog === 'Trip' ? activeCondition : null,
+        caption: caption,
+        location: location || null,
+        duration_hours: duration ? Number(duration) : null,
+        distance_km: distance ? Number(distance) : null,
+        species: species || null,
+        weight_lbs: weight ? Number(weight) : null,
+        length_in: length ? Number(length) : null,
+        released: activeLog === 'Catch' ? released : null,
+        image_url: image_url,
+      };
 
-    if (error) {
-      Alert.alert('Could not post', friendlyError(error));
-    } else {
-      onSaved();
-      onClose();
+      let error;
+      if (editingPost) {
+        // edit → update the existing row
+        ({ error } = await supabase.from('posts').update(fields).eq('id', editingPost.id));
+      } else {
+        // create → insert a new row stamped with this user
+        ({ error } = await supabase.from('posts').insert({ ...fields, user_id: user.id }));
+      }
+
+      if (error) {
+        Alert.alert('Could not post', friendlyError(error));
+      } else {
+        onSaved();
+        onClose();
+      }
+    } finally {
+      setSaving(false);
     }
   }
 
   return (
     <>
       <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-        <Pressable style={styles.modalOverlay} onPress={onClose}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-            <Pressable style={styles.modalSheet} onPress={() => {}}>
+        <View style={styles.modalOverlay}>
+          <Pressable style={styles.spacer} onPress={onClose} />
+          <KeyboardAvoidingView
+            style={styles.modalSheet}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          >
               <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>{editingPost ? 'Edit Post' : 'New Post'}</Text>
@@ -231,9 +242,9 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost }:
                       </TouchableOpacity>
                     ))}
                   </View>
-                  <TextInput style={styles.fieldInput} placeholder="Duration (hours)" placeholderTextColor="#8899AA" keyboardType="numeric" value={duration} onChangeText={setDuration} />
-                  <TextInput style={styles.fieldInput} placeholder="Distance (km)" placeholderTextColor="#8899AA" keyboardType="numeric" value={distance} onChangeText={setDistance} />
-                  <TextInput style={styles.fieldInput} placeholder="Where? (e.g. Narrows to Sparrow Lake)" placeholderTextColor="#8899AA" value={location} onChangeText={setLocation} />
+                  <TextInput style={styles.fieldInput} placeholder="Duration (hours)" placeholderTextColor={Colors.muted} keyboardType="numeric" value={duration} onChangeText={setDuration} />
+                  <TextInput style={styles.fieldInput} placeholder="Distance (km)" placeholderTextColor={Colors.muted} keyboardType="numeric" value={distance} onChangeText={setDistance} />
+                  <TextInput style={styles.fieldInput} placeholder="Where? (e.g. Narrows to Sparrow Lake)" placeholderTextColor={Colors.muted} value={location} onChangeText={setLocation} />
                 </>
               )}
 
@@ -257,7 +268,7 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost }:
 
               {/* Check-in fields */}
               {activeLog === 'Check-in' && (
-                <TextInput style={[styles.fieldInput, { marginTop: 16 }]} placeholder="Where are you? (marina / location)" placeholderTextColor="#8899AA" value={location} onChangeText={setLocation} />
+                <TextInput style={[styles.fieldInput, { marginTop: 16 }]} placeholder="Where are you? (marina / location)" placeholderTextColor={Colors.muted} value={location} onChangeText={setLocation} />
               )}
 
               <TouchableOpacity style={styles.photoButton} onPress={pickImage}>
@@ -277,19 +288,20 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost }:
               <TextInput
                 style={styles.captionInput}
                 placeholder="Say something about it..."
-                placeholderTextColor="#8899AA"
+                placeholderTextColor={Colors.muted}
                 value={caption}
                 onChangeText={setCaption}
                 multiline
               />
 
-              <TouchableOpacity style={styles.postButton} onPress={handleSave}>
-                <Text style={styles.postButtonText}>{editingPost ? 'Save Changes' : 'Post to Dock Feed'}</Text>
+              <TouchableOpacity style={[styles.postButton, saving && { opacity: 0.6 }]} onPress={handleSave} disabled={saving}>
+                <Text style={styles.postButtonText}>
+                  {saving ? 'Posting…' : editingPost ? 'Save Changes' : 'Post to Dock Feed'}
+                </Text>
               </TouchableOpacity>
               </ScrollView>
-            </Pressable>
           </KeyboardAvoidingView>
-        </Pressable>
+        </View>
       </Modal>
 
       {/* Full-screen image viewer */}
@@ -315,14 +327,15 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'flex-end',
   },
+  spacer: {
+    flex: 1,
+  },
   modalSheet: {
-    backgroundColor: '#0F0F0F',
+    backgroundColor: Colors.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,
     paddingBottom: 40,
-    borderWidth: 1,
-    borderColor: '#1E1E1E',
     maxHeight: '85%',
   },
   modalHeader: {
@@ -337,7 +350,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   modalClose: {
-    color: '#8899AA',
+    color: Colors.muted,
     fontSize: 20,
   },
   cardTitle: {
@@ -352,18 +365,16 @@ const styles = StyleSheet.create({
   },
   tab: {
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#2E4057',
+    backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
   },
   tabActive: {
     backgroundColor: Colors.gold,
-    borderColor: Colors.gold,
   },
   tabText: {
-    color: '#8899AA',
+    color: Colors.muted,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -372,14 +383,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   fieldInput: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.surfaceAlt,
     color: Colors.cream,
     borderRadius: 12,
     padding: 14,
     fontSize: 15,
     marginTop: 12,
-    borderWidth: 1,
-    borderColor: '#333333',
   },
   wrapRow: {
     flexDirection: 'row',
@@ -390,8 +399,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#2E4057',
+    backgroundColor: Colors.surfaceAlt,
   },
   releaseToggle: {
     marginTop: 12,
@@ -405,8 +413,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingVertical: 12,
     borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#2E4057',
+    backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
   },
   photoButtonText: {
@@ -438,7 +445,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   captionInput: {
-    backgroundColor: '#1A1A1A',
+    backgroundColor: Colors.surfaceAlt,
     color: Colors.cream,
     borderRadius: 12,
     padding: 16,
@@ -446,8 +453,6 @@ const styles = StyleSheet.create({
     minHeight: 60,
     marginTop: 16,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#333333',
   },
   postButton: {
     backgroundColor: Colors.gold,
