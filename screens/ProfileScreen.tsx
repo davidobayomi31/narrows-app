@@ -1,9 +1,20 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Image,
+  Alert,
+  Dimensions,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
+import { friendlyError } from '../lib/errors';
 import PostComposer from './components/PostComposer';
 
 const BADGE_COLORS: Record<string, string> = {
@@ -12,29 +23,23 @@ const BADGE_COLORS: Record<string, string> = {
   CHECK: '#92400E',
 };
 
-const AVATAR_COLORS = ['#2E4057', '#5B6C3F', '#7A4E2E', '#4A5D7E', '#6B4E71', '#3F6B5E', '#8A5A44', '#5A4E8A'];
+const FILTERS = ['All', 'Trips', 'Catches', 'Check-ins'];
+const FILTER_TYPE: Record<string, string> = {
+  Trips: 'TRIP',
+  Catches: 'CATCH',
+  'Check-ins': 'CHECK',
+};
 
-function getAvatarColor(name: string) {
-  const letter = name?.[0]?.toUpperCase() || 'B';
-  return AVATAR_COLORS[letter.charCodeAt(0) % AVATAR_COLORS.length];
-}
-
-function timeAgo(iso: string) {
-  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
+const screenW = Dimensions.get('window').width;
+const TILE = (screenW - 32 - 16) / 3; // 16px side padding(32) + two 8px gaps(16)
 
 export default function ProfileScreen() {
   const navigation = useNavigation<any>();
   const [profile, setProfile] = useState<any>(null);
   const [myPosts, setMyPosts] = useState<any[]>([]);
   const [editingPost, setEditingPost] = useState<any>(null);
+  const [activeFilter, setActiveFilter] = useState('All');
 
-  // reload every time the Profile tab comes into focus (so new posts show up)
   useFocusEffect(
     useCallback(() => {
       loadProfile();
@@ -42,7 +47,6 @@ export default function ProfileScreen() {
     }, [])
   );
 
-  // stats computed from this user's posts
   const stats = [
     { label: 'Trips', value: String(myPosts.filter((p) => p.type === 'TRIP').length) },
     { label: 'Catches', value: String(myPosts.filter((p) => p.type === 'CATCH').length) },
@@ -53,41 +57,19 @@ export default function ProfileScreen() {
   async function loadProfile() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single();
-
-    if (error) {
-      console.log(error.message);
-    } else {
-      setProfile(data);
-    }
+    const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+    if (data) setProfile(data);
   }
 
   async function loadMyPosts() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-
-    // only this user's own posts, newest first
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('posts')
       .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
-
-    if (error) {
-      console.log(error.message);
-    } else {
-      setMyPosts(data || []);
-    }
-  }
-
-  async function handleLogout() {
-    await supabase.auth.signOut();
-    navigation.navigate('Login');
+    setMyPosts(data || []);
   }
 
   function postMenu(post: any) {
@@ -100,68 +82,90 @@ export default function ProfileScreen() {
 
   async function deletePost(id: string) {
     const { error } = await supabase.from('posts').delete().eq('id', id);
-    if (error) {
-      alert(error.message);
-    } else {
-      loadMyPosts();
-    }
+    if (error) Alert.alert('Could not delete', friendlyError(error));
+    else loadMyPosts();
   }
+
+  const visiblePosts =
+    activeFilter === 'All' ? myPosts : myPosts.filter((p) => p.type === FILTER_TYPE[activeFilter]);
+
+  const name = `${profile?.first_name || 'Boater'} ${profile?.last_name || ''}`;
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-
-        {/* User header */}
-        <View style={styles.profileHeader}>
-          <View style={[styles.avatar, { backgroundColor: getAvatarColor(profile?.first_name) }]}>
-            <Text style={styles.avatarText}>{profile?.first_name?.[0] || 'B'}</Text>
-          </View>
-          <Text style={styles.profileName}>
-            {profile?.first_name || 'Boater'} {profile?.last_name || ''}
-          </Text>
-          <Text style={styles.profileSub}>{profile?.region || 'Set your region'}</Text>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* top bar */}
+        <View style={styles.topBar}>
+          <TouchableOpacity onPress={() => navigation.navigate('Settings')} hitSlop={10}>
+            <Ionicons name="settings-outline" size={24} color={Colors.cream} />
+          </TouchableOpacity>
         </View>
 
-        {/* Stats row */}
+        {/* header */}
+        <View style={styles.header}>
+          {profile?.avatar_url ? (
+            <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
+          ) : (
+            <View style={[styles.avatar, styles.avatarPlaceholder]}>
+              <Text style={styles.avatarInitial}>{profile?.first_name?.[0]?.toUpperCase() || 'B'}</Text>
+            </View>
+          )}
+          <View style={styles.nameRow}>
+            <Text style={styles.name}>{name}</Text>
+            {profile?.verified && (
+              <Ionicons name="checkmark-circle" size={18} color={Colors.gold} style={{ marginLeft: 6 }} />
+            )}
+          </View>
+          {profile?.region ? <Text style={styles.region}>{profile.region}</Text> : null}
+          {profile?.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
+        </View>
+
+        {/* stats */}
         <View style={styles.statsRow}>
-          {stats.map((stat) => (
-            <View key={stat.label} style={styles.statCell}>
-              <Text style={styles.statValue}>{stat.value}</Text>
-              <Text style={styles.statLabel}>{stat.label}</Text>
+          {stats.map((s) => (
+            <View key={s.label} style={styles.statCell}>
+              <Text style={styles.statValue}>{s.value}</Text>
+              <Text style={styles.statLabel}>{s.label}</Text>
             </View>
           ))}
         </View>
 
-        {/* Your posts */}
-        <Text style={styles.sectionTitle}>Your Posts</Text>
-        {myPosts.length === 0 ? (
-          <Text style={styles.emptyText}>You haven't posted anything yet.</Text>
-        ) : (
-          myPosts.map((post) => (
+        {/* filter tabs */}
+        <View style={styles.tabs}>
+          {FILTERS.map((f) => (
             <TouchableOpacity
-              key={post.id}
-              style={styles.card}
-              onLongPress={() => postMenu(post)}
+              key={f}
+              style={[styles.tab, activeFilter === f && styles.tabActive]}
+              onPress={() => setActiveFilter(f)}
             >
-              <View style={styles.postHeader}>
-                <View style={[styles.badge, { backgroundColor: BADGE_COLORS[post.type] }]}>
-                  <Text style={styles.badgeText}>{post.type}</Text>
-                </View>
-                <Text style={styles.postTime}>{timeAgo(post.created_at)}</Text>
-              </View>
-              <Text style={styles.postCaption}>{post.caption}</Text>
+              <Text style={[styles.tabText, activeFilter === f && styles.tabTextActive]}>{f}</Text>
             </TouchableOpacity>
-          ))
+          ))}
+        </View>
+
+        {/* posts grid */}
+        {visiblePosts.length === 0 ? (
+          <Text style={styles.empty}>Nothing here yet.</Text>
+        ) : (
+          <View style={styles.grid}>
+            {visiblePosts.map((post) => (
+              <TouchableOpacity key={post.id} style={styles.tile} onLongPress={() => postMenu(post)}>
+                {post.image_url ? (
+                  <Image source={{ uri: post.image_url }} style={styles.tileImage} />
+                ) : (
+                  <View style={styles.tileFallback}>
+                    <View style={[styles.tileBadge, { backgroundColor: BADGE_COLORS[post.type] }]}>
+                      <Text style={styles.tileBadgeText}>{post.type}</Text>
+                    </View>
+                    <Text style={styles.tileCaption} numberOfLines={3}>{post.caption}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
         )}
-
-        {/* Log out */}
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutButtonText}>Log Out</Text>
-        </TouchableOpacity>
-
       </ScrollView>
 
-      {/* Shared composer (edit mode) */}
       <PostComposer
         visible={!!editingPost}
         editingPost={editingPost}
@@ -173,119 +177,38 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 48,
-  },
-  profileHeader: {
-    alignItems: 'center',
-    paddingVertical: 24,
-  },
-  avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  avatarText: {
-    color: Colors.cream,
-    fontSize: 28,
-    fontWeight: 'bold',
-  },
-  profileName: {
-    color: Colors.cream,
-    fontSize: 22,
-    fontWeight: 'bold',
-  },
-  profileSub: {
-    color: '#8899AA',
-    fontSize: 13,
-    marginTop: 4,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    backgroundColor: '#0F0F0F',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#1E1E1E',
-    marginBottom: 24,
-  },
-  statCell: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 16,
-  },
-  statValue: {
-    color: Colors.gold,
-    fontSize: 22,
-    fontWeight: 'bold',
-  },
-  statLabel: {
-    color: '#8899AA',
-    fontSize: 12,
-    marginTop: 2,
-  },
-  sectionTitle: {
-    color: Colors.cream,
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 12,
-  },
-  emptyText: {
-    color: '#8899AA',
-    fontSize: 14,
-    marginBottom: 24,
-  },
-  card: {
-    backgroundColor: '#0F0F0F',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#1E1E1E',
-  },
-  postHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  badgeText: {
-    color: Colors.white,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  postTime: {
-    color: '#8899AA',
-    fontSize: 12,
-  },
-  postCaption: {
-    color: '#8899AA',
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  logoutButton: {
-    marginTop: 16,
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#FF4444',
-  },
-  logoutButtonText: {
-    color: '#FF4444',
-    fontSize: 16,
-    fontWeight: '700',
-  },
+  safeArea: { flex: 1, backgroundColor: Colors.background },
+  scrollContent: { paddingHorizontal: 16, paddingBottom: 120 },
+
+  topBar: { flexDirection: 'row', justifyContent: 'flex-end', paddingVertical: 8 },
+
+  header: { alignItems: 'center', marginBottom: 20 },
+  avatar: { width: 88, height: 88, borderRadius: 44 },
+  avatarPlaceholder: { backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
+  avatarInitial: { color: Colors.cream, fontSize: 34, fontWeight: 'bold' },
+  nameRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
+  name: { color: Colors.cream, fontSize: 22, fontWeight: 'bold' },
+  region: { color: Colors.muted, fontSize: 13, marginTop: 4 },
+  bio: { color: Colors.cream, fontSize: 14, textAlign: 'center', marginTop: 8, lineHeight: 20 },
+
+  statsRow: { flexDirection: 'row', backgroundColor: Colors.surface, borderRadius: 20, marginBottom: 20 },
+  statCell: { flex: 1, alignItems: 'center', paddingVertical: 16 },
+  statValue: { color: Colors.gold, fontSize: 20, fontWeight: 'bold' },
+  statLabel: { color: Colors.muted, fontSize: 12, marginTop: 2 },
+
+  tabs: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  tab: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: Colors.surface },
+  tabActive: { backgroundColor: Colors.gold },
+  tabText: { color: Colors.muted, fontSize: 13, fontWeight: '600' },
+  tabTextActive: { color: Colors.black, fontWeight: '700' },
+
+  empty: { color: Colors.muted, fontSize: 14, textAlign: 'center', marginTop: 24 },
+
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  tile: { width: TILE, height: TILE, borderRadius: 12, overflow: 'hidden', backgroundColor: Colors.surface },
+  tileImage: { width: '100%', height: '100%' },
+  tileFallback: { flex: 1, padding: 8 },
+  tileBadge: { alignSelf: 'flex-start', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginBottom: 6 },
+  tileBadgeText: { color: Colors.white, fontSize: 9, fontWeight: '700' },
+  tileCaption: { color: Colors.muted, fontSize: 11, lineHeight: 15 },
 });

@@ -8,6 +8,8 @@ import SignupScreen from './screens/SignupScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
 import ConfirmEmailScreen from './screens/ConfirmEmailScreen';
 import ExploreScreen from './screens/ExploreScreen';
+import SettingsScreen from './screens/SettingsScreen';
+import EditProfileScreen from './screens/EditProfileScreen';
 import { Colors } from './constants/colors';
 
 const Stack = createNativeStackNavigator();
@@ -34,7 +36,26 @@ export default function App(){
             headerStyle: { backgroundColor: Colors.background },
             headerTintColor: Colors.cream,
           }}
-
+          />
+        <Stack.Screen
+          name='Settings'
+          component={SettingsScreen}
+          options={{
+            headerShown: true,
+            title: 'Settings',
+            headerStyle: { backgroundColor: Colors.background },
+            headerTintColor: Colors.cream,
+          }}
+        />
+        <Stack.Screen
+          name='EditProfile'
+          component={EditProfileScreen}
+          options={{
+            headerShown: true,
+            title: 'Edit Profile',
+            headerStyle: { backgroundColor: Colors.background },
+            headerTintColor: Colors.cream,
+          }}
          />
       </Stack.Navigator>
     </NavigationContainer>
