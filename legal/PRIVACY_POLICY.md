@@ -1,11 +1,8 @@
 # Narrows — Privacy Policy
 
-**Last updated:** [EFFECTIVE DATE]
+**Last updated:** June 26, 2026
 
-> ⚠️ DRAFT for legal review. Replace every `[BRACKETED]` placeholder and have a
-> lawyer confirm before publishing. Prepared as a starting point, not legal advice.
-
-This Privacy Policy explains how **[LEGAL OPERATOR NAME]** ("Narrows", "we", "us")
+This Privacy Policy explains how **Narrows** ("we", "us")
 collects, uses, and shares information when you use the Narrows mobile application
 (the "App"). Narrows is a boating and fishing community app for the Simcoe County,
 Ontario area.
@@ -15,8 +12,8 @@ By creating an account or using the App, you agree to this Privacy Policy.
 ---
 
 ## 1. Who we are
-Narrows is operated by **[LEGAL OPERATOR NAME]**, located in **[CITY, Ontario,
-Canada]**. For any privacy question or request, contact us at **[CONTACT EMAIL]**.
+Narrows is based in **Orillia, Ontario, Canada**. For any privacy question or
+request, contact us at **support@narrows.site**.
 
 ## 2. Information we collect
 
@@ -51,8 +48,8 @@ We do **not** intentionally collect financial information or government IDs.
 - To improve features and fix problems.
 - To communicate with you about your account (e.g., email confirmation, password
   reset).
-- **[IF APPLICABLE]** To select and display advertising based on the onboarding
-  information you provide (e.g., region, boat ownership, experience). See Section 6.
+- To select and display advertising based on the onboarding information you
+  provide (e.g., region, boat ownership, experience). See Section 6.
 
 ## 4. What is public vs. private
 - **Public to other signed-in users:** your first/last name, profile photo,
@@ -67,14 +64,15 @@ their service to us:
 - **Supabase** — database, authentication, and file storage (hosts your account
   and content).
 - **Resend** — sending account emails (e.g., confirmation and password-reset codes).
-- **Apple Maps / [MAP PROVIDER]** — displaying maps.
+- **Apple Maps** — displaying maps.
 - **Open-Meteo** — weather data (we send only marina coordinates, not your
   personal information).
-- **[RainViewer / others as added]** — weather radar imagery.
+- We may add other weather/radar data providers (such as RainViewer) in the
+  future.
 
 We do **not** sell your personal information.
 
-## 6. Advertising **[INCLUDE IF/WHEN ADS ARE LIVE]**
+## 6. Advertising
 We may show advertising in the App. Where we use your onboarding information
 (such as region or boat ownership) to make ads more relevant, we will disclose
 this and, where required by law, offer a way to opt out. We do not share your
@@ -101,17 +99,17 @@ Subject to applicable law (including Canada's **PIPEDA**), you may:
 - **Withdraw consent** (e.g., turn off location), understanding some features may
   stop working.
 
-To make a request, email **[CONTACT EMAIL]**.
+To make a request, email **support@narrows.site**.
 
 ## 10. Deleting your account
-You can delete your account from **[Profile → Settings → Delete Account]** or by
-emailing **[CONTACT EMAIL]**. Deleting your account removes your profile and
+You can delete your account by emailing **support@narrows.site** from the email
+address on your account. Deleting your account removes your profile and
 content (posts, comments, likes, catch pins, trips) via cascading deletion.
 
 ## 11. Children
-The App is not intended for children under **[MINIMUM AGE — e.g., 13]**. We do not
-knowingly collect personal information from anyone under that age. If you believe a
-child has provided us information, contact **[CONTACT EMAIL]** and we will delete it.
+The App is not intended for children under **13**. We do not knowingly collect
+personal information from anyone under that age. If you believe a child has
+provided us information, contact **support@narrows.site** and we will delete it.
 
 ## 12. Security
 We protect your data using industry-standard measures, including Row Level
@@ -127,4 +125,4 @@ We may update this policy. We will post the new "Last updated" date and, for
 material changes, notify you in the App or by email.
 
 ## 15. Contact
-**[LEGAL OPERATOR NAME]** — **[CONTACT EMAIL]** — **[MAILING ADDRESS, optional]**
+**Narrows** — **support@narrows.site** — Orillia, Ontario, Canada

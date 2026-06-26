@@ -1,26 +1,23 @@
 # Narrows — Terms of Service
 
-**Last updated:** [EFFECTIVE DATE]
-
-> ⚠️ DRAFT for legal review. Replace every `[BRACKETED]` placeholder and have a
-> lawyer confirm before publishing. Prepared as a starting point, not legal advice.
+**Last updated:** June 26, 2026
 
 These Terms of Service ("Terms") are a legal agreement between you and
-**[LEGAL OPERATOR NAME]** ("Narrows", "we", "us") governing your use of the Narrows
+**Narrows** ("we", "us") governing your use of the Narrows
 mobile application (the "App"). By creating an account or using the App, you agree
 to these Terms. If you do not agree, do not use the App.
 
 ---
 
 ## 1. Eligibility
-You must be at least **[MINIMUM AGE — e.g., 13]** years old to use the App. By using
+You must be at least **13** years old to use the App. By using
 it, you represent that you meet this requirement and that the information you
 provide is accurate.
 
 ## 2. Your account
 - You are responsible for keeping your login credentials secure and for all
   activity under your account.
-- Notify us at **[CONTACT EMAIL]** if you suspect unauthorized use.
+- Notify us at **support@narrows.site** if you suspect unauthorized use.
 
 ## 3. Acceptable use
 You agree **not** to:
@@ -42,7 +39,7 @@ You agree **not** to:
 - We may remove content or suspend accounts that violate these Terms.
 
 ## 5. Reporting and moderation
-You can report content or users via **[in-app report / CONTACT EMAIL]**. We may, but
+You can report content or users by emailing **support@narrows.site**. We may, but
 are not obligated to, review, remove, or restrict content at our discretion.
 
 ## 6. ⚓ Safety and navigation disclaimer (IMPORTANT)
@@ -65,10 +62,10 @@ availability, or terms of those third parties.
 
 ## 8. Intellectual property
 The App, its design, branding ("Narrows"), and software are owned by
-**[LEGAL OPERATOR NAME]** and protected by law. You may not copy, modify, reverse
+**Narrows** and protected by law. You may not copy, modify, reverse
 engineer, or redistribute the App except as allowed by law.
 
-## 9. Advertising **[INCLUDE IF/WHEN ADS ARE LIVE]**
+## 9. Advertising
 The App may display advertising. See our Privacy Policy for how advertising may
 use information you provide.
 
@@ -83,14 +80,14 @@ and non-infringement. We do not warrant that the App will be uninterrupted,
 error-free, or accurate.
 
 ## 12. Limitation of liability
-To the maximum extent permitted by law, **[LEGAL OPERATOR NAME]** will not be liable
+To the maximum extent permitted by law, **Narrows** will not be liable
 for any indirect, incidental, special, consequential, or punitive damages, or for
 any loss of profits, data, goodwill, **or any injury, loss, or damage arising from
 boating, fishing, navigation, or reliance on the App**. Our total liability for any
-claim will not exceed **[CAD $100 / the amount you paid us in the past 12 months]**.
+claim will not exceed **CAD $100**.
 
 ## 13. Indemnification
-You agree to indemnify and hold harmless **[LEGAL OPERATOR NAME]** from claims
+You agree to indemnify and hold harmless **Narrows** from claims
 arising out of your User Content, your use of the App, or your violation of these
 Terms or any law.
 
@@ -105,4 +102,4 @@ material changes, notify you in the App. Continued use means you accept the
 updated Terms.
 
 ## 16. Contact
-**[LEGAL OPERATOR NAME]** — **[CONTACT EMAIL]**
+**Narrows** — **support@narrows.site**
