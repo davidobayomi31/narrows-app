@@ -115,6 +115,7 @@ export default function CommentsModal({ visible, postId, onClose, onCommentAdded
             style={styles.scroll}
             contentContainerStyle={styles.list}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
           >
             {comments.length === 0 ? (
               <Text style={styles.empty}>No comments yet. Be the first.</Text>

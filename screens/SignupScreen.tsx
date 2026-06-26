@@ -104,7 +104,11 @@ if (lastName.trim().length < 1) {
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+      >
         <Image
           source={require('../assets/narrows-logo-clear.png')}
           style={styles.logo}

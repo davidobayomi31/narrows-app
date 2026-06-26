@@ -50,10 +50,23 @@ export default function FeedScreen() {
   // double-tap "like" pop animation
   const [heartPostId, setHeartPostId] = useState<string | null>(null);
   const heartScale = useRef(new Animated.Value(0)).current;
+  const logoPulse = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     loadPosts();
   }, []);
+    useEffect(() => {
+    if (refreshing) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(logoPulse, { toValue: 1.15, duration: 500, useNativeDriver: true }),
+          Animated.timing(logoPulse, { toValue: 0.9, duration: 500, useNativeDriver: true }),
+        ])
+      ).start();
+    } else {
+      logoPulse.setValue(1);
+    }
+  }, [refreshing]);
 
   function showHeart(postId: string) {
     setHeartPostId(postId);
@@ -129,9 +142,6 @@ export default function FeedScreen() {
       <View style={styles.topBar}>
         <Text style={styles.brand}>Narrows</Text>
         <View style={styles.topActions}>
-          <TouchableOpacity hitSlop={8} onPress={() => navigation.navigate('Explore')}>
-            <Ionicons name="search" size={24} color={Colors.cream} />
-          </TouchableOpacity>
           <TouchableOpacity hitSlop={8} onPress={() => {}}>
             <Ionicons name="notifications-outline" size={24} color={Colors.cream} />
           </TouchableOpacity>
@@ -141,7 +151,7 @@ export default function FeedScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.gold} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.background} />}
       >
         {/* filter tabs */}
         <View style={styles.filterRow}>
@@ -155,6 +165,16 @@ export default function FeedScreen() {
             </TouchableOpacity>
           ))}
         </View>
+                {refreshing && (
+          <View style={styles.refreshLogo} pointerEvents="none">
+            <Animated.Image
+              source={require('../assets/narrows-logo-clear.png')}
+              style={{ width: 38, height: 38, transform: [{ scale: logoPulse }] }}
+              resizeMode="contain"
+            />
+          </View>
+        )}
+
 
         {visiblePosts.length === 0 && (
           <Text style={styles.emptyText}>No posts yet — be the first to share your day on the water.</Text>
@@ -327,4 +347,5 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   fabText: { color: Colors.black, fontSize: 34, fontWeight: '700', marginTop: -2 },
+  refreshLogo: { alignItems: 'center', paddingVertical: 8 },
 });

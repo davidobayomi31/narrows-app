@@ -114,6 +114,7 @@ export default function EditProfileScreen() {
       style={styles.screen}
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="interactive"
       automaticallyAdjustKeyboardInsets
     >
       {/* avatar */}

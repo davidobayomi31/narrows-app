@@ -231,7 +231,7 @@ export default function Homepage(){
                 <Text style={styles.spotlightKicker}>SPOTLIGHT</Text>
                 <Text style={styles.spotlightTitle}>Summer on the water</Text>
                 <Text style={styles.spotlightSub}>Events, fuel deals & marina news all season.</Text>
-                <TouchableOpacity style={styles.spotlightBtn}>
+                <TouchableOpacity style={styles.spotlightBtn} onPress={() => navigation.navigate('Events')}>
                   <Text style={styles.spotlightBtnText}>Explore</Text>
                 </TouchableOpacity>
               </View>
@@ -295,12 +295,6 @@ export default function Homepage(){
         <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
         <View style={styles.headerInner}>
           <Text style={styles.headerTitle}>NARROWS</Text>
-          <TouchableOpacity
-            style={styles.marinaDropdown}
-            onPress={() => navigation.navigate('Explore')}
-          >
-            <Ionicons name="search" size={20} color={Colors.gold} />
-          </TouchableOpacity>
         </View>
       </View>
     </View>

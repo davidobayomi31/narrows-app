@@ -204,7 +204,7 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost }:
             style={styles.modalSheet}
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           >
-              <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" showsVerticalScrollIndicator={false}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>{editingPost ? 'Edit Post' : 'New Post'}</Text>
                 <TouchableOpacity onPress={onClose}>

@@ -65,6 +65,7 @@ export default function LoginScreen() {
       <ScrollView
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
       >
         <Image
           source={require('../assets/narrows-logo-clear.png')}
