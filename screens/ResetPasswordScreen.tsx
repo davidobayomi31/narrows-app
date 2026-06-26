@@ -21,55 +21,28 @@ export default function ResetPasswordScreen() {
 
   const [code, setCode] = useState('');
   const [codeError, setCodeError] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [passwordError, setPasswordError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  async function resetPassword() {
-    let valid = true;
-
+  async function verifyCode() {
     if (code.length !== 8) {
       setCodeError('Enter the code from your email');
-      valid = false;
-    } else {
-      setCodeError('');
+      return;
     }
-
-    if (newPassword.length < 6) {
-      setPasswordError('Password must be at least 6 characters');
-      valid = false;
-    } else {
-      setPasswordError('');
-    }
-
-    if (!valid) return;
-
+    setCodeError('');
     setLoading(true);
 
-    const { error: verifyError } = await supabase.auth.verifyOtp({
+    const { error } = await supabase.auth.verifyOtp({
       email,
       token: code,
       type: 'recovery',
     });
 
-    if (verifyError) {
-      setLoading(false);
-      setCodeError(verifyError.message);
-      return;
-    }
-
-    const { error: updateError } = await supabase.auth.updateUser({
-      password: newPassword,
-    });
-
-    await supabase.auth.signOut();
     setLoading(false);
 
-    if (updateError) {
-      Alert.alert('Something went wrong', friendlyError(updateError));
+    if (error) {
+      setCodeError(error.message);
     } else {
-      Alert.alert('Password updated', 'Please log in with your new password.');
-      navigation.navigate('Login');
+      navigation.navigate('SetNewPassword');
     }
   }
 
@@ -90,21 +63,11 @@ export default function ResetPasswordScreen() {
         />
         {codeError ? <Text style={styles.errorText}>{codeError}</Text> : null}
 
-        <TextInput
-          style={[styles.input, passwordError ? styles.inputError : null]}
-          placeholder="New password"
-          placeholderTextColor="#8899AA"
-          secureTextEntry
-          value={newPassword}
-          onChangeText={setNewPassword}
-        />
-        {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
-
-        <TouchableOpacity style={styles.button} onPress={resetPassword} disabled={loading}>
+        <TouchableOpacity style={styles.button} onPress={verifyCode} disabled={loading}>
           {loading ? (
             <ActivityIndicator color={Colors.background} />
           ) : (
-            <Text style={styles.buttonText}>Reset Password</Text>
+            <Text style={styles.buttonText}>Verify</Text>
           )}
         </TouchableOpacity>
       </View>

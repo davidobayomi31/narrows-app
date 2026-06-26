@@ -7,6 +7,9 @@ import SplashScreen from './screens/SplashScreen';
 import SignupScreen from './screens/SignupScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
 import ConfirmEmailScreen from './screens/ConfirmEmailScreen';
+import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
+import ResetPasswordScreen from './screens/ResetPasswordScreen';
+import SetNewPasswordScreen from './screens/SetNewPasswordScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import EditProfileScreen from './screens/EditProfileScreen';
 import EventsScreen from './screens/EventsScreen';
@@ -29,6 +32,9 @@ export default function App(){
         <Stack.Screen name='Home' component={MainTabs} />
         <Stack.Screen name='Onboarding' component={OnboardingScreen} />
         <Stack.Screen name='ConfirmEmail' component={ConfirmEmailScreen} />
+        <Stack.Screen name='ForgotPassword' component={ForgotPasswordScreen} />
+        <Stack.Screen name='ResetPassword' component={ResetPasswordScreen} />
+        <Stack.Screen name='SetNewPassword' component={SetNewPasswordScreen} />
         <Stack.Screen
           name='Settings'
           component={SettingsScreen}

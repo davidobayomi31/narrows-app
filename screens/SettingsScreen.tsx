@@ -7,7 +7,6 @@ import { supabase } from '../lib/supabase';
 // TODO: replace these with your real hosted URLs + support email before launch
 const PRIVACY_URL = 'https://narrows.app/privacy';
 const TERMS_URL = 'https://narrows.app/terms';
-const SUPPORT_EMAIL = 'support@narrows.app';
 
 function Row({
   icon,
@@ -32,22 +31,19 @@ function Row({
 export default function SettingsScreen() {
   const navigation = useNavigation<any>();
 
-  async function logOut() {
-    await supabase.auth.signOut();
-    navigation.navigate('Login');
-  }
-
-  function deleteAccount() {
+  function logOut() {
     Alert.alert(
-      'Delete account',
-      'This permanently deletes your account and all your posts, comments, and pins. Email us and we will remove your account.',
+      'Log out',
+      'Are you sure you want to log out?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Email to delete',
+          text: 'Log Out',
           style: 'destructive',
-          onPress: () =>
-            Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=Delete my Narrows account`),
+          onPress: async () => {
+            await supabase.auth.signOut();
+            navigation.navigate('Login');
+          },
         },
       ]
     );
@@ -69,7 +65,6 @@ export default function SettingsScreen() {
       <Text style={styles.section}>ACCOUNT ACTIONS</Text>
       <View style={styles.group}>
         <Row icon="log-out-outline" label="Log Out" onPress={logOut} />
-        <Row icon="trash-outline" label="Delete Account" danger onPress={deleteAccount} />
       </View>
     </ScrollView>
   );
