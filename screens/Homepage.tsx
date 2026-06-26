@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ImageBackground, Linking, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ImageBackground, Linking, Alert, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -76,24 +76,31 @@ export default function Homepage(){
   // holds the featured marina once it loads (null until then)
   const [marina, setMarina] = useState<Marina | null>(null);
   const [weather, setWeather] = useState<Weather | null>(null);
+  const [ready, setReady] = useState(false);
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
 
-    // load the featured marina once when the screen first appears
+    // load the featured marina once when the screen first appears.
+    // `ready` stays false until this resolves, so the page reveals fully
+    // loaded instead of flashing an empty/partial state.
   useEffect(() => {
     async function loadMarina() {
-      const { data, error } = await supabase
-        .from('marinas')
-        .select('id, name, lake, address, phone, amenities, latitude, longitude, image_url, water_alert')
-        .eq('featured', true)
-        .single();          // expect exactly one featured marina
+      try {
+        const { data, error } = await supabase
+          .from('marinas')
+          .select('id, name, lake, address, phone, amenities, latitude, longitude, image_url, water_alert')
+          .eq('featured', true)
+          .single();          // expect exactly one featured marina
 
-      if (!error && data) {
-        setMarina(data);
-        if (data.latitude != null && data.latitude != null){
-          const w = await getWeather(data.latitude, data.longitude);
-          setWeather(w);
+        if (!error && data) {
+          setMarina(data);
+          if (data.latitude != null && data.longitude != null) {
+            const w = await getWeather(data.latitude, data.longitude);
+            setWeather(w);
+          }
         }
+      } finally {
+        setReady(true);
       }
     }
     loadMarina();
@@ -126,6 +133,14 @@ export default function Homepage(){
       },
       { text: 'Cancel', style: 'cancel' },
     ]);
+  }
+
+  if (!ready) {
+    return (
+      <View style={styles.loadingRoot}>
+        <Image source={require('../assets/narrows-logo-clear.png')} style={styles.loadingLogo} />
+      </View>
+    );
   }
 
   return (
@@ -165,6 +180,10 @@ export default function Homepage(){
 
         {/* 2. Featured Marina — full-bleed photo hero */}
         {marina && (
+          <TouchableOpacity
+            activeOpacity={0.92}
+            onPress={() => navigation.navigate('MarinaProfile', { marinaId: marina.id })}
+          >
           <ImageBackground
             source={{ uri: marina.image_url || MARINA_FALLBACK }}
             style={styles.marinaHero}
@@ -192,6 +211,7 @@ export default function Homepage(){
               </TouchableOpacity>
             </View>
           </ImageBackground>
+          </TouchableOpacity>
         )}
 
         {weather ? (
@@ -306,6 +326,16 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  loadingRoot: {
+    flex: 1,
+    backgroundColor: Colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingLogo: {
+    width: 120,
+    height: 120,
   },
   // Floating frosted header
   floatingHeader: {

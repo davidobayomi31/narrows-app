@@ -17,6 +17,7 @@ import { useState, useEffect } from 'react';
 import { Colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
 import { friendlyError } from '../../lib/errors';
+import { containsBlockedWords } from '../../lib/moderation';
 
 type Props = {
   visible: boolean;
@@ -66,6 +67,12 @@ export default function CommentsModal({ visible, postId, onClose, onCommentAdded
 
   async function addComment() {
     if (body.trim().length === 0) return;
+
+    if (containsBlockedWords(body)) {
+      Alert.alert('Comment not allowed', 'Your comment contains language that violates our community guidelines.');
+      return;
+    }
+
     setSending(true);
 
     const { data: { user } } = await supabase.auth.getUser();

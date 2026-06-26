@@ -13,6 +13,7 @@ import SetNewPasswordScreen from './screens/SetNewPasswordScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import EditProfileScreen from './screens/EditProfileScreen';
 import EventsScreen from './screens/EventsScreen';
+import MarinaProfileScreen from './screens/MarinaProfileScreen';
 import { StatusBar } from 'expo-status-bar';
 import { Colors } from './constants/colors';
 
@@ -65,6 +66,7 @@ export default function App(){
             headerTintColor: Colors.cream,
           }}
         />
+        <Stack.Screen name='MarinaProfile' component={MarinaProfileScreen} />
       </Stack.Navigator>
     </NavigationContainer>
     

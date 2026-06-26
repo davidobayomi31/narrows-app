@@ -12,10 +12,18 @@ import {
 } from 'react-native';
 import MapView, { Marker, LongPressEvent, Callout } from 'react-native-maps';
 import * as Location from 'expo-location';
+import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
 import { friendlyError } from '../lib/errors';
 import { Ionicons } from '@expo/vector-icons';
+
+type MarinaPin = {
+  id: string;
+  name: string;
+  latitude: number | null;
+  longitude: number | null;
+};
 
 type CatchPin = {
   id: string;
@@ -38,7 +46,9 @@ function timeAgo(iso: string) {
 }
 
 export default function MapScreen() {
+  const navigation = useNavigation<any>();
   const [pins, setPins] = useState<CatchPin[]>([]);
+  const [marinas, setMarinas] = useState<MarinaPin[]>([]);
   const [hasLocationPerm, setHasLocationPerm] = useState(false);
   const [mapType, setMapType] = useState<'standard' | 'satellite'>('standard');
   const [userId, setUserId] = useState<string | null>(null);
@@ -53,8 +63,15 @@ export default function MapScreen() {
   useEffect(() => {
     requestLocation();
     loadPins();
+    loadMarinas();
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
   }, []);
+
+  // load marina locations (static pins, separate from community catch pins)
+  async function loadMarinas() {
+    const { data } = await supabase.from('marinas').select('id, name, latitude, longitude');
+    setMarinas(data || []);
+  }
 
   // ask for GPS permission so the blue user-location dot can show
   async function requestLocation() {
@@ -147,6 +164,26 @@ export default function MapScreen() {
         }}
         onLongPress={handleLongPress}
       >
+        {marinas
+          .filter((m) => m.latitude != null && m.longitude != null)
+          .map((m) => (
+            <Marker
+              key={`marina-${m.id}`}
+              coordinate={{ latitude: m.latitude as number, longitude: m.longitude as number }}
+              onCalloutPress={() => navigation.navigate('MarinaProfile', { marinaId: m.id })}
+            >
+              <View style={styles.marinaMarker}>
+                <Ionicons name="boat" size={16} color={Colors.black} />
+              </View>
+              <Callout>
+                <View style={styles.callout}>
+                  <Text style={styles.calloutTitle}>{m.name}</Text>
+                  <Text style={styles.calloutDelete}>Tap to view marina</Text>
+                </View>
+              </Callout>
+            </Marker>
+          ))}
+
         {pins.map((pin) => (
           <Marker
             key={pin.id}
@@ -226,6 +263,17 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   map: { flex: 1 },
+
+  marinaMarker: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: Colors.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: Colors.cream,
+  },
 
   hint: {
     position: 'absolute',

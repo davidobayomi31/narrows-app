@@ -115,20 +115,6 @@ export default function LoginScreen() {
           <Text style={styles.loginButtonText}>Log In</Text>
         </TouchableOpacity>
 
-        <View style={styles.orRow}>
-          <View style={styles.orLine} />
-          <Text style={styles.orText}>or</Text>
-          <View style={styles.orLine} />
-        </View>
-
-        <TouchableOpacity style={styles.appleButton}>
-          <Text style={styles.appleButtonText}>Continue with Apple</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.googleButton}>
-          <Text style={styles.googleButtonText}>Continue with Google</Text>
-        </TouchableOpacity>
-
         {/* navigates to signup screen — navigation to be wired up later */}
         <TouchableOpacity 
         style={styles.signupRow}
@@ -262,48 +248,6 @@ const styles = StyleSheet.create({
     color: Colors.background,
     fontSize: 16,
     fontWeight: '700',
-  },
-  orRow: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  orLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#2E4057',
-  },
-  orText: {
-    color: '#8899AA',
-    marginHorizontal: 12,
-    fontSize: 14,
-  },
-  appleButton: {
-  width: '100%',
-  backgroundColor: Colors.white,
-  padding: 16,
-  borderRadius: 12,
-  alignItems: 'center',
-  marginBottom: 12,
-},
-appleButtonText: {
-  color: Colors.black,
-  fontSize: 16,
-  fontWeight: '600',
-},
-  googleButton: {
-    width: '100%',
-    backgroundColor: Colors.white,
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginBottom: 32,
-  },
-  googleButtonText: {
-    color: Colors.black,
-    fontSize: 16,
-    fontWeight: '600',
   },
   signupRow: {
     marginTop: 8,

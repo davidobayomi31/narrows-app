@@ -17,6 +17,7 @@ import { Colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
 import * as ImagePicker from 'expo-image-picker';
 import { friendlyError } from '../../lib/errors';
+import { containsBlockedWords } from '../../lib/moderation';
 
 const LOG_TYPES = ['Trip', 'Catch', 'Check-in'];
 const CONDITIONS = ['GREAT', 'MIXED', 'ROUGH'];
@@ -147,6 +148,11 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost }:
 
     if (caption.trim().length === 0) {
       Alert.alert('Add a caption', 'Please write a caption before posting.');
+      return;
+    }
+
+    if (containsBlockedWords(caption)) {
+      Alert.alert('Post not allowed', 'Your caption contains language that violates our community guidelines.');
       return;
     }
 
