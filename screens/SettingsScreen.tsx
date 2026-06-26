@@ -3,10 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
-
-// TODO: replace these with your real hosted URLs + support email before launch
-const PRIVACY_URL = 'https://narrows.app/privacy';
-const TERMS_URL = 'https://narrows.app/terms';
+import { PRIVACY_URL, TERMS_URL } from '../constants/legal';
 
 function Row({
   icon,

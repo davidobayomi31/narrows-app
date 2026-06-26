@@ -9,13 +9,16 @@ import {
   Platform,
   ScrollView,
   Alert,
+  Linking,
 } from 'react-native';
 import { useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
 import { friendlyError } from '../lib/errors';
+import { PRIVACY_URL, TERMS_URL } from '../constants/legal';
 
 
 export default function SignupScreen() {
@@ -36,6 +39,8 @@ export default function SignupScreen() {
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [agreeError, setAgreeError] = useState('');
 
   // validates all fields before creating account
   async function validateAndSignup() {
@@ -75,6 +80,13 @@ if (lastName.trim().length < 1) {
       valid = false;
     } else {
       setConfirmPasswordError('');
+    }
+
+    if (!agreedToTerms) {
+      setAgreeError('You must agree to the Terms of Service and Privacy Policy');
+      valid = false;
+    } else {
+      setAgreeError('');
     }
 
     if (valid) {
@@ -184,6 +196,29 @@ if (lastName.trim().length < 1) {
         </View>
         {confirmPasswordError ? <Text style={styles.errorText}>{confirmPasswordError}</Text> : null}
 
+        <TouchableOpacity
+          style={styles.agreeRow}
+          onPress={() => setAgreedToTerms(!agreedToTerms)}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name={agreedToTerms ? 'checkbox' : 'square-outline'}
+            size={22}
+            color={agreedToTerms ? Colors.gold : '#8899AA'}
+          />
+          <Text style={styles.legalText}>
+            I agree to the{' '}
+            <Text style={styles.legalLink} onPress={() => Linking.openURL(TERMS_URL)}>
+              Terms of Service
+            </Text>{' '}
+            and{' '}
+            <Text style={styles.legalLink} onPress={() => Linking.openURL(PRIVACY_URL)}>
+              Privacy Policy
+            </Text>
+          </Text>
+        </TouchableOpacity>
+        {agreeError ? <Text style={styles.agreeErrorText}>{agreeError}</Text> : null}
+
         <TouchableOpacity style={styles.signupButton} onPress={validateAndSignup}>
           <Text style={styles.signupButtonText}>Create Account</Text>
         </TouchableOpacity>
@@ -276,6 +311,30 @@ const styles = StyleSheet.create({
   },
   eyeText: {
     fontSize: 20,
+  },
+  agreeRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    width: '100%',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  legalText: {
+    flex: 1,
+    color: '#8899AA',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  agreeErrorText: {
+    color: '#FF4444',
+    fontSize: 12,
+    alignSelf: 'flex-start',
+    marginBottom: 12,
+  },
+  legalLink: {
+    color: Colors.gold,
+    fontWeight: '600',
   },
   signupButton: {
     width: '100%',
