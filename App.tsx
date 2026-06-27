@@ -14,13 +14,16 @@ import SettingsScreen from './screens/SettingsScreen';
 import EditProfileScreen from './screens/EditProfileScreen';
 import EventsScreen from './screens/EventsScreen';
 import MarinaProfileScreen from './screens/MarinaProfileScreen';
+import NotificationsScreen from './screens/NotificationsScreen';
 import { StatusBar } from 'expo-status-bar';
 import { Colors } from './constants/colors';
+import { TripProvider } from './contexts/TripContext';
 
 const Stack = createNativeStackNavigator();
 
 export default function App(){
   return (
+    <TripProvider>
     <NavigationContainer>
       <StatusBar style="light" />
       <Stack.Navigator
@@ -67,8 +70,18 @@ export default function App(){
           }}
         />
         <Stack.Screen name='MarinaProfile' component={MarinaProfileScreen} />
+        <Stack.Screen
+          name='Notifications'
+          component={NotificationsScreen}
+          options={{
+            headerShown: true,
+            title: 'Notifications',
+            headerStyle: { backgroundColor: Colors.background },
+            headerTintColor: Colors.cream,
+          }}
+        />
       </Stack.Navigator>
     </NavigationContainer>
-    
+    </TripProvider>
   );
 }

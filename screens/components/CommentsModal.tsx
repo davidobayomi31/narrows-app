@@ -22,6 +22,7 @@ import { containsBlockedWords } from '../../lib/moderation';
 type Props = {
   visible: boolean;
   postId: string | null;
+  postOwnerId?: string | null;
   onClose: () => void;
   onCommentAdded: () => void;
 };
@@ -35,7 +36,7 @@ function timeAgo(iso: string) {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-export default function CommentsModal({ visible, postId, onClose, onCommentAdded }: Props) {
+export default function CommentsModal({ visible, postId, postOwnerId, onClose, onCommentAdded }: Props) {
   const [comments, setComments] = useState<any[]>([]);
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
@@ -81,11 +82,22 @@ export default function CommentsModal({ visible, postId, onClose, onCommentAdded
       return;
     }
 
+    const trimmedBody = body.trim();
     const { error } = await supabase.from('comments').insert({
       post_id: postId,
       user_id: user.id,
-      body: body.trim(),
+      body: trimmedBody,
     });
+
+    if (!error && postOwnerId && postOwnerId !== user.id) {
+      await supabase.from('notifications').insert({
+        recipient_id: postOwnerId,
+        actor_id: user.id,
+        type: 'comment',
+        post_id: postId,
+        comment_body: trimmedBody.slice(0, 140),
+      });
+    }
 
     setSending(false);
     if (error) {

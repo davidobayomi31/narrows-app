@@ -4,10 +4,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Colors } from '../constants/colors';
 import { useEffect, useState, useCallback } from 'react';
-import { supabase} from '../lib/supabase';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons} from '@expo/vector-icons';
 import { getWeather, Weather} from '../lib/weather';
+import { Marina, loadHomeData, getCachedHomeData } from '../lib/homeData';
 import WindCompass from './components/WindCompass';
 
 // shown behind the marina name if a marina has no image_url yet
@@ -59,20 +59,6 @@ function iconToText(icon: string) {
   return map[icon] ?? 'Cloudy';
 }
 export default function Homepage(){
-  // shape of a marina row from the DB
-  type Marina = {
-    id: string;
-    name: string;
-    lake: string | null;
-    address: string | null;
-    phone: string | null;
-    amenities: string[] | null;
-    latitude: number | null;
-    longitude: number | null;
-    image_url: string | null;
-    water_alert: string | null;
-  };
-
   // holds the featured marina once it loads (null until then)
   const [marina, setMarina] = useState<Marina | null>(null);
   const [weather, setWeather] = useState<Weather | null>(null);
@@ -80,25 +66,24 @@ export default function Homepage(){
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
 
-    // load the featured marina once when the screen first appears.
-    // `ready` stays false until this resolves, so the page reveals fully
-    // loaded instead of flashing an empty/partial state.
+    // Splash usually already prefetched this data in parallel with its own
+    // logo display — if so, use it immediately with no loader. Otherwise
+    // (e.g. arriving via Login/Onboarding instead of Splash), fetch it here
+    // and show the loading gate just this once.
   useEffect(() => {
     async function loadMarina() {
-      try {
-        const { data, error } = await supabase
-          .from('marinas')
-          .select('id, name, lake, address, phone, amenities, latitude, longitude, image_url, water_alert')
-          .eq('featured', true)
-          .single();          // expect exactly one featured marina
+      const cached = getCachedHomeData();
+      if (cached.hasCached) {
+        setMarina(cached.marina);
+        setWeather(cached.weather);
+        setReady(true);
+        return;
+      }
 
-        if (!error && data) {
-          setMarina(data);
-          if (data.latitude != null && data.longitude != null) {
-            const w = await getWeather(data.latitude, data.longitude);
-            setWeather(w);
-          }
-        }
+      try {
+        const { marina, weather } = await loadHomeData();
+        setMarina(marina);
+        setWeather(weather);
       } finally {
         setReady(true);
       }

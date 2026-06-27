@@ -8,11 +8,14 @@ import {
   Pressable,
   RefreshControl,
   Animated,
+  Share,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useState, useEffect, useRef } from 'react';
-import { useNavigation } from '@react-navigation/native';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { File, Paths } from 'expo-file-system';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
 import PostComposer from './components/PostComposer';
@@ -40,12 +43,20 @@ function timeAgo(iso: string) {
 
 export default function FeedScreen() {
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
   const [activeFilter, setActiveFilter] = useState('All');
   const [posts, setPosts] = useState<any[]>([]);
   const [showComposer, setShowComposer] = useState(false);
   const [commentsPostId, setCommentsPostId] = useState<string | null>(null);
+  const [commentsPostOwnerId, setCommentsPostOwnerId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const lastTap = useRef<Record<string, number>>({});
+
+  // jump-to-post (from a tapped notification)
+  const scrollRef = useRef<ScrollView>(null);
+  const postOffsets = useRef<Record<string, number>>({});
+  const [highlightPostId, setHighlightPostId] = useState<string | null>(null);
 
   // double-tap "like" pop animation
   const [heartPostId, setHeartPostId] = useState<string | null>(null);
@@ -55,6 +66,63 @@ export default function FeedScreen() {
   useEffect(() => {
     loadPosts();
   }, []);
+
+  // refresh the unread badge whenever Feed regains focus (e.g. after
+  // visiting Notifications, which marks everything read)
+  useFocusEffect(
+    useCallback(() => {
+      loadUnreadCount();
+    }, [])
+  );
+
+  async function loadUnreadCount() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { count } = await supabase
+      .from('notifications')
+      .select('id', { count: 'exact', head: true })
+      .eq('recipient_id', user.id)
+      .eq('read', false);
+    setUnreadCount(count || 0);
+  }
+
+  // a tapped notification passes focusPostId — scroll to that post and flash it.
+  // focusNonce changes every tap so re-tapping the same post re-triggers this.
+  useEffect(() => {
+    const focusPostId = route.params?.focusPostId as string | undefined;
+    if (!focusPostId) return;
+
+    // make sure the post isn't hidden by the current filter
+    setActiveFilter('All');
+
+    let highlightTimer: ReturnType<typeof setTimeout>;
+    // wait a beat for the (possibly re-filtered) list to lay out, then scroll
+    const scrollTimer = setTimeout(() => {
+      const y = postOffsets.current[focusPostId];
+      if (y != null) {
+        scrollRef.current?.scrollTo({ y: Math.max(y - 12, 0), animated: true });
+      }
+      setHighlightPostId(focusPostId);
+      highlightTimer = setTimeout(() => setHighlightPostId(null), 1600);
+
+      if (route.params?.focusType === 'comment') {
+        const post = posts.find((p) => p.id === focusPostId);
+        if (post) {
+          setCommentsPostId(post.id);
+          setCommentsPostOwnerId(post.user_id);
+        }
+      }
+    }, 350);
+
+    // clear the param so navigating back here later doesn't re-fire
+    navigation.setParams({ focusPostId: undefined, focusType: undefined });
+
+    return () => {
+      clearTimeout(scrollTimer);
+      clearTimeout(highlightTimer);
+    };
+  }, [route.params?.focusNonce]);
+
     useEffect(() => {
     if (refreshing) {
       Animated.loop(
@@ -122,6 +190,24 @@ export default function FeedScreen() {
     setRefreshing(false);
   }
 
+  // downloads the post photo locally (if any) so it can be attached to the
+  // native share sheet, then shares it with a Narrows text tag
+  async function sharePost(post: any) {
+    try {
+      let localUri: string | undefined;
+      if (post.image_url) {
+        const file = await File.downloadFileAsync(post.image_url, Paths.cache);
+        localUri = file.uri;
+      }
+      await Share.share({
+        message: `${post.caption ? post.caption + '\n\n' : ''}Shared via Narrows 🚤 narrows.site`,
+        url: localUri,
+      });
+    } catch (e: any) {
+      Alert.alert('Could not share', 'Something went wrong sharing this post.');
+    }
+  }
+
   async function toggleLike(post: any) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -129,6 +215,14 @@ export default function FeedScreen() {
       await supabase.from('likes').delete().eq('post_id', post.id).eq('user_id', user.id);
     } else {
       await supabase.from('likes').insert({ post_id: post.id, user_id: user.id });
+      if (post.user_id !== user.id) {
+        await supabase.from('notifications').insert({
+          recipient_id: post.user_id,
+          actor_id: user.id,
+          type: 'like',
+          post_id: post.id,
+        });
+      }
     }
     loadPosts();
   }
@@ -142,13 +236,19 @@ export default function FeedScreen() {
       <View style={styles.topBar}>
         <Text style={styles.brand}>Narrows</Text>
         <View style={styles.topActions}>
-          <TouchableOpacity hitSlop={8} onPress={() => {}}>
+          <TouchableOpacity hitSlop={8} onPress={() => navigation.navigate('Notifications')}>
             <Ionicons name="notifications-outline" size={24} color={Colors.cream} />
+            {unreadCount > 0 && (
+              <View style={styles.unreadBadge}>
+                <Text style={styles.unreadBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
       </View>
 
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.background} />}
@@ -198,7 +298,11 @@ export default function FeedScreen() {
           const detail = detailParts.join('  ·  ');
 
           return (
-            <View key={post.id} style={styles.post}>
+            <View
+              key={post.id}
+              style={[styles.post, highlightPostId === post.id && styles.postHighlight]}
+              onLayout={(e) => { postOffsets.current[post.id] = e.nativeEvent.layout.y; }}
+            >
               {/* header */}
               <View style={styles.postHeader}>
                 <View style={[styles.avatar, { backgroundColor: getAvatarColor(post.author?.first_name) }]}>
@@ -237,9 +341,19 @@ export default function FeedScreen() {
                   />
                   <Text style={styles.actionCount}>{post.likeCount}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.actionBtn} hitSlop={8} onPress={() => setCommentsPostId(post.id)}>
+                <TouchableOpacity
+                  style={styles.actionBtn}
+                  hitSlop={8}
+                  onPress={() => {
+                    setCommentsPostId(post.id);
+                    setCommentsPostOwnerId(post.user_id);
+                  }}
+                >
                   <Ionicons name="chatbubble-outline" size={22} color={Colors.cream} />
                   <Text style={styles.actionCount}>{post.commentCount}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.actionBtn} hitSlop={8} onPress={() => sharePost(post)}>
+                  <Ionicons name="share-outline" size={22} color={Colors.cream} />
                 </TouchableOpacity>
               </View>
 
@@ -250,7 +364,13 @@ export default function FeedScreen() {
                   {post.caption}
                 </Text>
                 {post.commentCount > 0 && (
-                  <Text style={styles.viewComments} onPress={() => setCommentsPostId(post.id)}>
+                  <Text
+                    style={styles.viewComments}
+                    onPress={() => {
+                      setCommentsPostId(post.id);
+                      setCommentsPostOwnerId(post.user_id);
+                    }}
+                  >
                     View all {post.commentCount} comments
                   </Text>
                 )}
@@ -268,6 +388,7 @@ export default function FeedScreen() {
       <CommentsModal
         visible={commentsPostId !== null}
         postId={commentsPostId}
+        postOwnerId={commentsPostOwnerId}
         onClose={() => setCommentsPostId(null)}
         onCommentAdded={loadPosts}
       />
@@ -287,6 +408,19 @@ const styles = StyleSheet.create({
   },
   brand: { color: Colors.cream, fontSize: 22, fontWeight: 'bold', letterSpacing: 2 },
   topActions: { flexDirection: 'row', gap: 18 },
+  unreadBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -6,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: Colors.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  unreadBadgeText: { color: Colors.black, fontSize: 10, fontWeight: '700' },
 
   scrollContent: { paddingBottom: 150 },
 
@@ -303,6 +437,10 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  postHighlight: {
+    backgroundColor: 'rgba(194,162,78,0.12)', // gold flash when jumped-to from a notification
+    borderRadius: 12,
   },
   heartOverlay: {
     ...StyleSheet.absoluteFillObject,

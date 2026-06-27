@@ -48,9 +48,10 @@ type Props = {
   onClose: () => void; // call this to close it
   onSaved: () => void; // call this after a successful save (parent reloads)
   editingPost?: any; // if present → edit mode; if undefined → create mode
+  tripPrefill?: { duration_hours: number; distance_km: number }; // pre-fill from a finished GPS trip
 };
 
-export default function PostComposer({ visible, onClose, onSaved, editingPost }: Props) {
+export default function PostComposer({ visible, onClose, onSaved, editingPost, tripPrefill }: Props) {
   const [activeLog, setActiveLog] = useState('Trip');
   const [activeCondition, setActiveCondition] = useState('GREAT');
   const [caption, setCaption] = useState('');
@@ -84,8 +85,8 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost }:
       setActiveLog('Trip');
       setActiveCondition('GREAT');
       setCaption('');
-      setDuration('');
-      setDistance('');
+      setDuration(tripPrefill ? String(tripPrefill.duration_hours) : '');
+      setDistance(tripPrefill ? String(tripPrefill.distance_km) : '');
       setLocation('');
       setSpecies('');
       setWeight('');
@@ -93,7 +94,7 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost }:
       setReleased(false);
       setImageUri(null);
     }
-  }, [visible, editingPost]);
+  }, [visible, editingPost, tripPrefill]);
 
   function pickImage() {
     Alert.alert('Add Photo', undefined, [
@@ -248,6 +249,9 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost }:
                       </TouchableOpacity>
                     ))}
                   </View>
+                  {tripPrefill && (
+                    <Text style={styles.tripPrefillNote}>Auto-tracked from GPS — adjust if needed</Text>
+                  )}
                   <TextInput style={styles.fieldInput} placeholder="Duration (hours)" placeholderTextColor={Colors.muted} keyboardType="numeric" value={duration} onChangeText={setDuration} />
                   <TextInput style={styles.fieldInput} placeholder="Distance (km)" placeholderTextColor={Colors.muted} keyboardType="numeric" value={distance} onChangeText={setDistance} />
                   <TextInput style={styles.fieldInput} placeholder="Where? (e.g. Narrows to Sparrow Lake)" placeholderTextColor={Colors.muted} value={location} onChangeText={setLocation} />
@@ -364,6 +368,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     marginBottom: 12,
+  },
+  tripPrefillNote: {
+    color: Colors.gold,
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 12,
   },
   row: {
     flexDirection: 'row',

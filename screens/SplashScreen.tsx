@@ -4,6 +4,7 @@ import {useNavigation} from '@react-navigation/native';
 import * as LocalAuthentication from 'expo-local-authentication';
 import {Colors} from '../constants/colors';
 import {supabase} from '../lib/supabase';
+import {loadHomeData} from '../lib/homeData';
 
 
 export default function SplashScreen(){
@@ -14,15 +15,17 @@ export default function SplashScreen(){
     }, []);
 
     async function checkLoginStatus() {
-        //wait 2 sec to show the logo
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        const minDisplay = new Promise(resolve => setTimeout(resolve, 2000));
 
         //check if use is still logged in - placeholder for now
         const {data} = await supabase.auth.getSession();
         if (data.session) {
+            // prefetch Home's data in parallel with the minimum logo display,
+            // so Home never needs to show its own loading screen right after this
+            await Promise.all([loadHomeData(), minDisplay]);
             navigation.navigate('Home');
-        
         } else {
+            await minDisplay;
             navigation.navigate('Login');
         }
     }

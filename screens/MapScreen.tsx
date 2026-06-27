@@ -17,6 +17,8 @@ import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
 import { friendlyError } from '../lib/errors';
 import { Ionicons } from '@expo/vector-icons';
+import { useTrip } from '../contexts/TripContext';
+import PostComposer from './components/PostComposer';
 
 type MarinaPin = {
   id: string;
@@ -36,6 +38,14 @@ type CatchPin = {
   author?: { first_name: string | null; last_name: string | null };
 };
 
+function formatElapsed(totalSeconds: number) {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+
 function timeAgo(iso: string) {
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
   if (mins < 1) return 'just now';
@@ -47,11 +57,16 @@ function timeAgo(iso: string) {
 
 export default function MapScreen() {
   const navigation = useNavigation<any>();
+  const { isTracking, elapsedSeconds, distanceKm, startTrip, endTrip } = useTrip();
   const [pins, setPins] = useState<CatchPin[]>([]);
   const [marinas, setMarinas] = useState<MarinaPin[]>([]);
   const [hasLocationPerm, setHasLocationPerm] = useState(false);
   const [mapType, setMapType] = useState<'standard' | 'satellite'>('standard');
   const [userId, setUserId] = useState<string | null>(null);
+
+  // trip composer state — opens once a trip ends, pre-filled with tracked stats
+  const [showTripComposer, setShowTripComposer] = useState(false);
+  const [tripPrefill, setTripPrefill] = useState<{ duration_hours: number; distance_km: number } | null>(null);
 
   // composer state
   const [showComposer, setShowComposer] = useState(false);
@@ -95,6 +110,19 @@ export default function MapScreen() {
       author: profilesData?.find((pr) => pr.id === p.user_id),
     }));
     setPins(merged);
+  }
+
+  async function handleStartTrip() {
+    const ok = await startTrip();
+    if (!ok) {
+      Alert.alert('Location needed', 'Enable location permission to track your trip.');
+    }
+  }
+
+  function handleEndTrip() {
+    const result = endTrip();
+    setTripPrefill(result);
+    setShowTripComposer(true);
   }
 
   // long-press the map → open the composer for that spot
@@ -206,9 +234,29 @@ export default function MapScreen() {
       </MapView>
 
       {/* hint pill */}
-      <View style={styles.hint} pointerEvents="none">
-        <Text style={styles.hintText}>Long-press the map to drop a catch pin</Text>
-      </View>
+      {!isTracking && (
+        <View style={styles.hint} pointerEvents="none">
+          <Text style={styles.hintText}>Long-press the map to drop a catch pin</Text>
+        </View>
+      )}
+
+      {/* live trip stats while tracking */}
+      {isTracking && (
+        <View style={styles.tripStats} pointerEvents="none">
+          <Text style={styles.tripStatsText}>{formatElapsed(elapsedSeconds)} · {distanceKm.toFixed(2)} km</Text>
+        </View>
+      )}
+
+      {/* start / end trip button */}
+      <TouchableOpacity
+        style={[styles.tripBtn, isTracking && styles.tripBtnActive]}
+        onPress={isTracking ? handleEndTrip : handleStartTrip}
+      >
+        <Ionicons name={isTracking ? 'stop-circle' : 'play-circle'} size={20} color={isTracking ? Colors.white : Colors.black} />
+        <Text style={[styles.tripBtnText, isTracking && { color: Colors.white }]}>
+          {isTracking ? 'End Trip' : 'Start Trip'}
+        </Text>
+      </TouchableOpacity>
       {/* satellite / standard toggle */}
       <TouchableOpacity
         style={styles.mapTypeBtn}
@@ -256,6 +304,14 @@ export default function MapScreen() {
           </KeyboardAvoidingView>
         </View>
       </Modal>
+
+      {/* finished-trip composer — pre-filled with tracked duration/distance */}
+      <PostComposer
+        visible={showTripComposer}
+        onClose={() => setShowTripComposer(false)}
+        onSaved={() => setShowTripComposer(false)}
+        tripPrefill={tripPrefill ?? undefined}
+      />
     </View>
   );
 }
@@ -285,6 +341,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   hintText: { color: Colors.cream, fontSize: 13, fontWeight: '600' },
+
+  tripStats: {
+    position: 'absolute',
+    top: 60,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  tripStatsText: { color: Colors.gold, fontSize: 13, fontWeight: '700' },
+
+  tripBtn: {
+    position: 'absolute',
+    bottom: 30,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: Colors.gold,
+    borderRadius: 24,
+    paddingVertical: 12,
+    paddingHorizontal: 22,
+  },
+  tripBtnActive: {
+    backgroundColor: '#7F1D1D',
+  },
+  tripBtnText: { color: Colors.black, fontSize: 15, fontWeight: '700' },
 
   backdrop: {
     flex: 1,
