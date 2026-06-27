@@ -20,6 +20,7 @@ import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
 import PostComposer from './components/PostComposer';
 import CommentsModal from './components/CommentsModal';
+import { REPORT_REASONS, reportContent, blockUser, getHiddenUserIds } from '../lib/safety';
 
 const FILTER = ['All', 'Trips', 'Catches', 'Check-ins'];
 const FILTER_TYPE: Record<string, string> = { Trips: 'TRIP', Catches: 'CATCH', 'Check-ins': 'CHECK' };
@@ -51,6 +52,7 @@ export default function FeedScreen() {
   const [commentsPostOwnerId, setCommentsPostOwnerId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const lastTap = useRef<Record<string, number>>({});
 
   // jump-to-post (from a tapped notification)
@@ -170,8 +172,14 @@ export default function FeedScreen() {
     const { data: likesData } = await supabase.from('likes').select('post_id, user_id');
     const { data: commentsData } = await supabase.from('comments').select('post_id');
     const { data: { user } } = await supabase.auth.getUser();
+    setCurrentUserId(user?.id ?? null);
 
-    const merged = (postsData || []).map((post) => {
+    // hide posts from users this user has blocked (or who blocked them)
+    const hidden = await getHiddenUserIds();
+
+    const merged = (postsData || [])
+      .filter((post) => !hidden.has(post.user_id))
+      .map((post) => {
       const postLikes = (likesData || []).filter((l) => l.post_id === post.id);
       return {
         ...post,
@@ -206,6 +214,56 @@ export default function FeedScreen() {
     } catch (e: any) {
       Alert.alert('Could not share', 'Something went wrong sharing this post.');
     }
+  }
+
+  // "⋯" menu on a post: report it, and (if it's not yours) block the author.
+  function openPostMenu(post: any) {
+    const buttons: any[] = [{ text: 'Report post', onPress: () => reportPost(post) }];
+    if (post.user_id !== currentUserId) {
+      buttons.push({ text: 'Block user', style: 'destructive', onPress: () => confirmBlock(post) });
+    }
+    buttons.push({ text: 'Cancel', style: 'cancel' });
+    Alert.alert('Post options', undefined, buttons);
+  }
+
+  function reportPost(post: any) {
+    const buttons: any[] = REPORT_REASONS.map((reason) => ({
+      text: reason,
+      onPress: async () => {
+        const ok = await reportContent({
+          contentType: 'post',
+          contentId: post.id,
+          contentOwnerId: post.user_id,
+          reason,
+        });
+        Alert.alert(
+          ok ? 'Thanks for reporting' : 'Could not report',
+          ok ? 'Our team will review this post within 24 hours.' : 'Please try again.'
+        );
+      },
+    }));
+    buttons.push({ text: 'Cancel', style: 'cancel' });
+    Alert.alert('Report post', 'Why are you reporting this?', buttons);
+  }
+
+  function confirmBlock(post: any) {
+    const name = post.author?.first_name || 'this user';
+    Alert.alert(
+      'Block user',
+      `You won't see posts or comments from ${name}, and they won't see yours.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Block',
+          style: 'destructive',
+          onPress: async () => {
+            const ok = await blockUser(post.user_id);
+            if (ok) loadPosts();
+            else Alert.alert('Could not block', 'Please try again.');
+          },
+        },
+      ]
+    );
   }
 
   async function toggleLike(post: any) {
@@ -315,6 +373,9 @@ export default function FeedScreen() {
                 <View style={[styles.badge, { backgroundColor: BADGE_COLORS[post.type] }]}>
                   <Text style={styles.badgeText}>{post.type}</Text>
                 </View>
+                <TouchableOpacity hitSlop={10} onPress={() => openPostMenu(post)} style={{ marginLeft: 8 }}>
+                  <Ionicons name="ellipsis-horizontal" size={20} color={Colors.muted} />
+                </TouchableOpacity>
               </View>
 
               {detail ? <Text style={styles.detail}>{detail}</Text> : null}

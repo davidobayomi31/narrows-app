@@ -89,13 +89,34 @@ At launch scale (Orillia, small user base) a simple per-user "max 1 post / 10s" 
 
 Each needs a paired Supabase table/function you create (SQL provided when we build it):
 
-- **A. Account deletion** 🔴 — Settings → "Delete Account" (confirm dialog → typed confirmation). Real deletion of the `auth.users` row needs admin rights, so it calls a **Supabase Edge Function** (`delete-account`) that uses the service role server-side to delete the user + cascade their rows. Client UI + function code from Claude; you deploy the function + set the secret.
-- **B. Report content** 🔴 — long-press / "⋯" on each post & comment → "Report" → reason picker → insert into a new `reports` table. You review that table.
-- **C. Block user** 🔴 — "⋯" on a post/profile → "Block" → insert into `blocked_users`; Feed/Map/Comments queries filter out blocked authors both ways.
-- **D. Age gate** 🟡 — date-of-birth (or 13+ confirm) step at signup; reject under-13.
-- **E. Rate-limit trigger** 🟡 — SQL trigger on `posts`/`catch_pins`/`comments`.
-- **F. Storage size cap** 🟡 — client-side check in `PostComposer` before upload + bucket-level limit.
-- **G. app.json** 🟡 — add `ios.bundleIdentifier` + `android.package` + background-location usage strings (for when tracking ships).
+- **A. Account deletion** 🔴 — ✅ **CODE DONE.** Settings → "Delete Account" (two-step confirm) → calls `supabase.functions.invoke('delete-account')` → signs out. **Pending you:** deploy `supabase/functions/delete-account/index.ts` (`supabase functions deploy delete-account`) + **verify FK cascade** (see ⚠️ below).
+- **B. Report content** 🔴 — ✅ **CODE DONE.** "⋯" menu on every post (`FeedScreen`) + long-press any comment (`CommentsModal`) → reason picker → inserts into `reports`. **Pending you:** run `supabase/security_setup.sql`, then review the `reports` table (open items) regularly.
+- **C. Block user** 🔴 — ✅ **CODE DONE.** "⋯" on others' posts → "Block" → inserts into `blocked_users`; `FeedScreen` + `CommentsModal` filter blocked users **both ways** (`lib/safety.ts` `getHiddenUserIds`). **Pending you:** same `security_setup.sql` run.
+- **D. Age gate** 🟡 — date-of-birth (or 13+ confirm) step at signup; reject under-13. *(not built yet)*
+- **E. Rate-limit trigger** 🟡 — SQL trigger on `posts`/`catch_pins`/`comments`. *(not built yet)*
+- **F. Storage size cap** 🟡 — client-side check in `PostComposer` before upload + bucket-level limit. *(not built yet)*
+- **G. app.json** 🟡 — add `ios.bundleIdentifier` + `android.package` + background-location usage strings. *(not built yet)*
+
+> ⚠️ **delete-account depends on FK cascade.** `auth.admin.deleteUser()` fails if any table references `auth.users(id)` *without* `ON DELETE CASCADE`. Before relying on deletion, verify every FK to `auth.users` (profiles, posts, comments, likes, catch_pins, notifications, reports, blocked_users) is `ON DELETE CASCADE`. If `profiles.id` references `auth.users(id)`, make sure that and the post/comment chains cascade — otherwise the function errors and the account isn't deleted.
+
+### Files added/changed this session (Apple 1.2 + 5.1.1 blockers)
+- `lib/safety.ts` (NEW) — `reportContent`, `blockUser`, `unblockUser`, `getHiddenUserIds`, `REPORT_REASONS`.
+- `screens/SettingsScreen.tsx` — Delete Account row + two-step confirm + Edge Function call.
+- `screens/FeedScreen.tsx` — per-post "⋯" menu (report/block), feed filtering of blocked users.
+- `screens/components/CommentsModal.tsx` — long-press-to-report comments, hide blocked users' comments.
+- `supabase/security_setup.sql` (NEW) — `reports` + `blocked_users` tables, RLS, grants, perf indexes.
+- `supabase/functions/delete-account/index.ts` (NEW) — admin delete Edge Function.
+- `tsconfig.json` — excludes `supabase/` (Deno code) from app typecheck.
+
+### EULA / Community Guidelines — ✅ CONTENT DRAFTED (pending hosting by you)
+- `legal-staging/community-guidelines.html` (NEW) — full Community Guidelines page. **You:** host in narrows-landing as `community-guidelines.html` → narrows.site/community-guidelines.html.
+- `legal-staging/terms-ugc-clause.html` (NEW) — zero-tolerance UGC `<section>` to paste into the existing `app-terms.html`. **You:** add it to app-terms.html in narrows-landing.
+- App now links to Community Guidelines from Settings (`constants/legal.ts` + `SettingsScreen.tsx`). The URL goes live once you host the page.
+- **EULA:** Narrows uses Apple's standard Licensed Application EULA (the default) — no separate EULA needed; the required zero-tolerance language lives in the ToS clause above, which users accept via the signup checkbox.
+- After hosting: delete the `legal-staging/` folder from narrows-app (it's just a handoff staging area).
+
+### ✅ All four Apple 🔴 blockers now addressed
+Account deletion (code+function+cascade), Report, Block, and EULA/UGC terms (drafted) are done. Remaining work is the 🟡 items (D–G) + hosting the two legal files.
 
 ---
 

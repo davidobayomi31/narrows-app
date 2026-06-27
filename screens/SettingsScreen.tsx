@@ -3,7 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
-import { PRIVACY_URL, TERMS_URL } from '../constants/legal';
+import { PRIVACY_URL, TERMS_URL, COMMUNITY_GUIDELINES_URL } from '../constants/legal';
 
 function Row({
   icon,
@@ -46,6 +46,49 @@ export default function SettingsScreen() {
     );
   }
 
+  // Apple Guideline 5.1.1(v): account creation requires in-app deletion of the
+  // account AND its data. Calls the `delete-account` Edge Function, which uses
+  // the service role server-side to remove the auth user (cascades their rows).
+  function deleteAccount() {
+    Alert.alert(
+      'Delete account',
+      'This permanently deletes your account, profile, posts, comments, and catch pins. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            // second confirmation — destructive + irreversible
+            Alert.alert(
+              'Are you absolutely sure?',
+              'There is no way to recover your account after this.',
+              [
+                { text: 'Keep my account', style: 'cancel' },
+                {
+                  text: 'Delete forever',
+                  style: 'destructive',
+                  onPress: async () => {
+                    const { error } = await supabase.functions.invoke('delete-account');
+                    if (error) {
+                      Alert.alert(
+                        'Could not delete account',
+                        'Something went wrong. Please try again or email support@narrows.site.'
+                      );
+                      return;
+                    }
+                    await supabase.auth.signOut();
+                    navigation.navigate('Login');
+                  },
+                },
+              ]
+            );
+          },
+        },
+      ]
+    );
+  }
+
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Text style={styles.section}>ACCOUNT</Text>
@@ -57,11 +100,13 @@ export default function SettingsScreen() {
       <View style={styles.group}>
         <Row icon="shield-outline" label="Privacy Policy" onPress={() => Linking.openURL(PRIVACY_URL)} />
         <Row icon="document-text-outline" label="Terms of Service" onPress={() => Linking.openURL(TERMS_URL)} />
+        <Row icon="people-outline" label="Community Guidelines" onPress={() => Linking.openURL(COMMUNITY_GUIDELINES_URL)} />
       </View>
 
       <Text style={styles.section}>ACCOUNT ACTIONS</Text>
       <View style={styles.group}>
         <Row icon="log-out-outline" label="Log Out" onPress={logOut} />
+        <Row icon="trash-outline" label="Delete Account" onPress={deleteAccount} danger />
       </View>
     </ScrollView>
   );

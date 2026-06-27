@@ -18,6 +18,7 @@ import { Colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
 import { friendlyError } from '../../lib/errors';
 import { containsBlockedWords } from '../../lib/moderation';
+import { REPORT_REASONS, reportContent, getHiddenUserIds } from '../../lib/safety';
 
 type Props = {
   visible: boolean;
@@ -59,11 +60,36 @@ export default function CommentsModal({ visible, postId, postOwnerId, onClose, o
       .from('profiles')
       .select('id, first_name, last_name');
 
-    const merged = (commentsData || []).map((c) => ({
-      ...c,
-      author: profilesData?.find((p) => p.id === c.user_id),
-    }));
+    // hide comments from blocked users (either direction)
+    const hidden = await getHiddenUserIds();
+
+    const merged = (commentsData || [])
+      .filter((c) => !hidden.has(c.user_id))
+      .map((c) => ({
+        ...c,
+        author: profilesData?.find((p) => p.id === c.user_id),
+      }));
     setComments(merged);
+  }
+
+  function reportComment(comment: any) {
+    const buttons: any[] = REPORT_REASONS.map((reason) => ({
+      text: reason,
+      onPress: async () => {
+        const ok = await reportContent({
+          contentType: 'comment',
+          contentId: comment.id,
+          contentOwnerId: comment.user_id,
+          reason,
+        });
+        Alert.alert(
+          ok ? 'Thanks for reporting' : 'Could not report',
+          ok ? 'Our team will review this comment within 24 hours.' : 'Please try again.'
+        );
+      },
+    }));
+    buttons.push({ text: 'Cancel', style: 'cancel' });
+    Alert.alert('Report comment', 'Why are you reporting this?', buttons);
   }
 
   async function addComment() {
@@ -140,13 +166,18 @@ export default function CommentsModal({ visible, postId, postOwnerId, onClose, o
               <Text style={styles.empty}>No comments yet. Be the first.</Text>
             ) : (
               comments.map((c) => (
-                <View key={c.id} style={styles.comment}>
+                <Pressable
+                  key={c.id}
+                  style={styles.comment}
+                  onLongPress={() => reportComment(c)}
+                  delayLongPress={400}
+                >
                   <Text style={styles.commentName}>
                     {c.author?.first_name || 'Boater'} {c.author?.last_name || ''}
                   </Text>
                   <Text style={styles.commentBody}>{c.body}</Text>
                   <Text style={styles.commentTime}>{timeAgo(c.created_at)}</Text>
-                </View>
+                </Pressable>
               ))
             )}
           </ScrollView>
