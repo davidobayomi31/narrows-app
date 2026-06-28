@@ -19,6 +19,11 @@ import * as ImagePicker from 'expo-image-picker';
 import { friendlyError } from '../../lib/errors';
 import { containsBlockedWords } from '../../lib/moderation';
 
+// cap uploads so a giant photo can't blow through storage/egress.
+// Photos are already compressed at quality 0.7, so this only catches extremes.
+const MAX_IMAGE_MB = 8;
+const MAX_IMAGE_BYTES = MAX_IMAGE_MB * 1024 * 1024;
+
 const LOG_TYPES = ['Trip', 'Catch', 'Check-in'];
 const CONDITIONS = ['GREAT', 'MIXED', 'ROUGH'];
 const SPECIES = ['Bass', 'Pike', 'Walleye', 'Perch', 'Musky', 'Trout', 'Other'];
@@ -111,7 +116,7 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost, t
       return;
     }
     const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
-    if (!result.canceled) {
+    if (!result.canceled && !isImageTooLarge(result.assets[0].fileSize)) {
       setImageUri(result.assets[0].uri);
     }
   }
@@ -121,13 +126,27 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost, t
       mediaTypes: ['images'],
       quality: 0.7,
     });
-    if (!result.canceled) {
+    if (!result.canceled && !isImageTooLarge(result.assets[0].fileSize)) {
       setImageUri(result.assets[0].uri);
     }
   }
 
+  // returns true (and warns) if the picked file is over the cap. fileSize may
+  // be undefined on some platforms — uploadImage has a hard backstop for that.
+  function isImageTooLarge(fileSize?: number | null): boolean {
+    if (fileSize != null && fileSize > MAX_IMAGE_BYTES) {
+      Alert.alert('Photo too large', `Please choose a photo under ${MAX_IMAGE_MB} MB.`);
+      return true;
+    }
+    return false;
+  }
+
   async function uploadImage(uri: string) {
     const arraybuffer = await fetch(uri).then((res) => res.arrayBuffer());
+    if (arraybuffer.byteLength > MAX_IMAGE_BYTES) {
+      Alert.alert('Photo too large', `Please choose a photo under ${MAX_IMAGE_MB} MB.`);
+      return null;
+    }
     const ext = uri.split('.').pop()?.toLowerCase() ?? 'jpeg';
     const path = `${Date.now()}.${ext}`;
     const contentType = ext === 'png' ? 'image/png' : 'image/jpeg';
@@ -165,7 +184,17 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost, t
       // keep an existing remote url, upload a new local file, or store nothing
       let image_url: string | null = null;
       if (imageUri) {
-        image_url = imageUri.startsWith('http') ? imageUri : await uploadImage(imageUri);
+        if (imageUri.startsWith('http')) {
+          image_url = imageUri;
+        } else {
+          image_url = await uploadImage(imageUri);
+          // upload failed or was rejected (too large) — stop, don't post a
+          // photo-less version of a post the user attached a photo to
+          if (image_url === null) {
+            setSaving(false);
+            return;
+          }
+        }
       }
 
       const fields = {

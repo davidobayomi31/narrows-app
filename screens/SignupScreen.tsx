@@ -41,6 +41,8 @@ export default function SignupScreen() {
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [agreeError, setAgreeError] = useState('');
+  const [confirmedAge, setConfirmedAge] = useState(false);
+  const [ageError, setAgeError] = useState('');
 
   // validates all fields before creating account
   async function validateAndSignup() {
@@ -80,6 +82,13 @@ if (lastName.trim().length < 1) {
       valid = false;
     } else {
       setConfirmPasswordError('');
+    }
+
+    if (!confirmedAge) {
+      setAgeError('You must be at least 13 years old to use Narrows');
+      valid = false;
+    } else {
+      setAgeError('');
     }
 
     if (!agreedToTerms) {
@@ -195,6 +204,20 @@ if (lastName.trim().length < 1) {
           </TouchableOpacity>
         </View>
         {confirmPasswordError ? <Text style={styles.errorText}>{confirmPasswordError}</Text> : null}
+
+        <TouchableOpacity
+          style={styles.agreeRow}
+          onPress={() => setConfirmedAge(!confirmedAge)}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name={confirmedAge ? 'checkbox' : 'square-outline'}
+            size={22}
+            color={confirmedAge ? Colors.gold : '#8899AA'}
+          />
+          <Text style={styles.legalText}>I confirm I am at least 13 years old.</Text>
+        </TouchableOpacity>
+        {ageError ? <Text style={styles.agreeErrorText}>{ageError}</Text> : null}
 
         <TouchableOpacity
           style={styles.agreeRow}

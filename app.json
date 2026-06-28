@@ -13,6 +13,7 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
+      "bundleIdentifier": "site.narrows.app",
       "infoPlist": {
         "NSFaceIDUsageDescription": "Narrows uses Face ID to sign you in quickly and securely.",
         "NSLocationWhenInUseUsageDescription": "Narrows uses your location to show your position on the water, drop catch pins, and track trips."
@@ -20,6 +21,7 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "site.narrows.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
