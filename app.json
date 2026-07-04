@@ -16,7 +16,8 @@
       "bundleIdentifier": "site.narrows.app",
       "infoPlist": {
         "NSFaceIDUsageDescription": "Narrows uses Face ID to sign you in quickly and securely.",
-        "NSLocationWhenInUseUsageDescription": "Narrows uses your location to show your position on the water, drop catch pins, and track trips."
+        "NSLocationWhenInUseUsageDescription": "Narrows uses your location to show your position on the water, drop catch pins, and track trips.",
+        "ITSAppUsesNonExemptEncryption": false
       },
       "supportsTablet": true
     },
@@ -31,6 +32,11 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "747b40d4-7c6e-416a-9be2-e4cd125daea7"
+      }
     }
   }
 }
