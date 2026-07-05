@@ -49,7 +49,7 @@ export default function LoginScreen() {
       if (error){
         Alert.alert('Login failed', friendlyError(error));
       } else {
-        navigation.navigate('Home');
+        navigation.navigate('Main');
       }
     } 
   }

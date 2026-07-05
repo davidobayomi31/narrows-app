@@ -1,4 +1,5 @@
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, InteractionManager } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useCallback } from 'react';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
@@ -21,7 +22,7 @@ export default function NotificationsScreen() {
 
   function openPost(item: any) {
     if (!item.post_id) return; // older notifications may predate post_id
-    navigation.navigate('Home', {
+    navigation.navigate('Main', {
       screen: 'Feed',
       params: { focusPostId: item.post_id, focusType: item.type, focusNonce: Date.now() },
     });
@@ -71,7 +72,16 @@ export default function NotificationsScreen() {
   }
 
   return (
-    <View style={styles.screen}>
+    <SafeAreaView style={styles.screen} edges={['top']}>
+      {/* custom header — a JS back button avoids the native-stack header
+          back button becoming unresponsive on repeat visits */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={12} style={styles.backBtn}>
+          <Ionicons name="chevron-back" size={26} color={Colors.cream} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Notifications</Text>
+        <View style={styles.backBtn} />
+      </View>
       <FlatList
         contentContainerStyle={styles.content}
         data={notifications}
@@ -108,12 +118,21 @@ export default function NotificationsScreen() {
           );
         }}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+  },
+  backBtn: { width: 40, alignItems: 'flex-start' },
+  headerTitle: { color: Colors.cream, fontSize: 18, fontWeight: '700' },
   content: { padding: 16 },
   empty: { color: Colors.muted, fontSize: 14, textAlign: 'center', marginTop: 60 },
   row: {

@@ -73,16 +73,7 @@ export default function App(){
           }}
         />
         <Stack.Screen name='MarinaProfile' component={MarinaProfileScreen} />
-        <Stack.Screen
-          name='Notifications'
-          component={NotificationsScreen}
-          options={{
-            headerShown: true,
-            title: 'Notifications',
-            headerStyle: { backgroundColor: Colors.background },
-            headerTintColor: Colors.cream,
-          }}
-        />
+        <Stack.Screen name='Notifications' component={NotificationsScreen} />
         <Stack.Screen name='PostDetail' component={PostDetailScreen} />
       </Stack.Navigator>
     </NavigationContainer>

@@ -23,7 +23,7 @@ export default function SplashScreen(){
             // prefetch Home's data in parallel with the minimum logo display,
             // so Home never needs to show its own loading screen right after this
             await Promise.all([loadHomeData(), minDisplay]);
-            navigation.navigate('Home');
+            navigation.navigate('Main');
         } else {
             await minDisplay;
             navigation.navigate('Login');
