@@ -47,7 +47,16 @@
         {
           "iosUrlScheme": "com.googleusercontent.apps.68112871311-r5e7q37ons8qc4ftdakj5d9tle3ngou3"
         }
-      ]
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useModularHeaders": true
+          }
+        }
+      ],
+      "./plugins/withGoogleSignInPodFix.js"
     ]
   }
 }
