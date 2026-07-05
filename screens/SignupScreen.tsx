@@ -20,6 +20,11 @@ import { supabase } from '../lib/supabase';
 import { friendlyError } from '../lib/errors';
 import { PRIVACY_URL, TERMS_URL } from '../constants/legal';
 
+// structural email check: something@something.tld, no spaces
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// well-known providers only ever use .com — catch the frequent truncation typos
+// (e.g. gmail.co / gmail.con) that pass the structural check but never deliver
+const OBVIOUS_TYPO = /@(gmail|googlemail|yahoo|hotmail|outlook|icloud|live|aol)\.(co|con|cm|om|c|comm|coom|cpm|xom|cim)$/i;
 
 export default function SignupScreen() {
   const navigation = useNavigation<any>();
@@ -62,8 +67,12 @@ if (lastName.trim().length < 1) {
   setLastNameError('');
 }
 
-    if (!email.includes('@')) {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!EMAIL_REGEX.test(cleanEmail)) {
       setEmailError('Please enter a valid email address');
+      valid = false;
+    } else if (OBVIOUS_TYPO.test(cleanEmail)) {
+      setEmailError('Double-check your email — did you mean “.com”?');
       valid = false;
     } else {
       setEmailError('');
@@ -100,7 +109,7 @@ if (lastName.trim().length < 1) {
 
     if (valid) {
         const { error } = await supabase.auth.signUp({
-            email,
+            email: cleanEmail,
             password,
             options: {
                 data: {
@@ -112,10 +121,10 @@ if (lastName.trim().length < 1) {
         if(error) {
             Alert.alert("Sign up failed", friendlyError(error));
         } else {
-            // navigate to onboarding after successful signup
-            navigation.navigate('ConfirmEmail', {email});
+            // navigate to the code screen with the normalized email
+            navigation.navigate('ConfirmEmail', { email: cleanEmail });
         }
-      
+
     }
   }
 

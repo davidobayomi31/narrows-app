@@ -15,14 +15,17 @@ import EditProfileScreen from './screens/EditProfileScreen';
 import EventsScreen from './screens/EventsScreen';
 import MarinaProfileScreen from './screens/MarinaProfileScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
+import PostDetailScreen from './screens/PostDetailScreen';
 import { StatusBar } from 'expo-status-bar';
 import { Colors } from './constants/colors';
 import { TripProvider } from './contexts/TripContext';
+import { UnitsProvider } from './contexts/UnitsContext';
 
 const Stack = createNativeStackNavigator();
 
 export default function App(){
   return (
+    <UnitsProvider>
     <TripProvider>
     <NavigationContainer>
       <StatusBar style="light" />
@@ -33,7 +36,7 @@ export default function App(){
         <Stack.Screen name='Splash' component={SplashScreen} />
         <Stack.Screen name='Login' component={LoginScreen} />
         <Stack.Screen name='Signup' component={SignupScreen} />
-        <Stack.Screen name='Home' component={MainTabs} />
+        <Stack.Screen name='Main' component={MainTabs} />
         <Stack.Screen name='Onboarding' component={OnboardingScreen} />
         <Stack.Screen name='ConfirmEmail' component={ConfirmEmailScreen} />
         <Stack.Screen name='ForgotPassword' component={ForgotPasswordScreen} />
@@ -80,8 +83,10 @@ export default function App(){
             headerTintColor: Colors.cream,
           }}
         />
+        <Stack.Screen name='PostDetail' component={PostDetailScreen} />
       </Stack.Navigator>
     </NavigationContainer>
     </TripProvider>
+    </UnitsProvider>
   );
 }

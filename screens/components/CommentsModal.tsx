@@ -41,11 +41,22 @@ export default function CommentsModal({ visible, postId, postOwnerId, onClose, o
   const [comments, setComments] = useState<any[]>([]);
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null); // id of the comment being edited
   const insets = useSafeAreaInsets(); // bottom inset so the input clears the home bar
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id ?? null));
+  }, []);
 
   useEffect(() => {
     if (visible && postId) {
       loadComments();
+    }
+    // leaving the sheet cancels any in-progress edit
+    if (!visible) {
+      setEditingId(null);
+      setBody('');
     }
   }, [visible, postId]);
 
@@ -70,6 +81,53 @@ export default function CommentsModal({ visible, postId, postOwnerId, onClose, o
         author: profilesData?.find((p) => p.id === c.user_id),
       }));
     setComments(merged);
+  }
+
+  // long-press a comment: your own → Edit/Delete; someone else's → Report
+  function commentMenu(comment: any) {
+    if (comment.user_id === currentUserId) {
+      Alert.alert('Your comment', undefined, [
+        { text: 'Edit', onPress: () => startEdit(comment) },
+        { text: 'Delete', style: 'destructive', onPress: () => confirmDelete(comment) },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+    } else {
+      reportComment(comment);
+    }
+  }
+
+  function startEdit(comment: any) {
+    setEditingId(comment.id);
+    setBody(comment.body);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setBody('');
+  }
+
+  function confirmDelete(comment: any) {
+    Alert.alert('Delete comment', 'This will permanently remove your comment.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          const { error } = await supabase
+            .from('comments')
+            .delete()
+            .eq('id', comment.id)
+            .eq('user_id', currentUserId);
+          if (error) {
+            Alert.alert('Could not delete', friendlyError(error));
+            return;
+          }
+          if (editingId === comment.id) cancelEdit();
+          loadComments();
+          onCommentAdded(); // refresh the feed's comment count
+        },
+      },
+    ]);
   }
 
   function reportComment(comment: any) {
@@ -109,6 +167,26 @@ export default function CommentsModal({ visible, postId, postOwnerId, onClose, o
     }
 
     const trimmedBody = body.trim();
+
+    // edit mode: update the existing comment and stop (no new notification)
+    if (editingId) {
+      const { error: editError } = await supabase
+        .from('comments')
+        .update({ body: trimmedBody })
+        .eq('id', editingId)
+        .eq('user_id', user.id);
+      setSending(false);
+      if (editError) {
+        Alert.alert('Could not update comment', friendlyError(editError));
+        return;
+      }
+      setEditingId(null);
+      setBody('');
+      loadComments();
+      onCommentAdded();
+      return;
+    }
+
     const { error } = await supabase.from('comments').insert({
       post_id: postId,
       user_id: user.id,
@@ -142,9 +220,11 @@ export default function CommentsModal({ visible, postId, postOwnerId, onClose, o
       <View style={styles.backdrop}>
         <Pressable style={styles.spacer} onPress={onClose} />
 
-        {/* the sheet — only covers the lower part of the screen */}
+        {/* the sheet — only covers the lower part of the screen.
+            insets.bottom can report 0 inside a Modal, so guarantee a minimum
+            gap so the input/Send button always clears the home indicator */}
         <KeyboardAvoidingView
-          style={[styles.sheet, { paddingBottom: insets.bottom + 12 }]}
+          style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 20) + 8 }]}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <View style={styles.handle} />
@@ -168,8 +248,8 @@ export default function CommentsModal({ visible, postId, postOwnerId, onClose, o
               comments.map((c) => (
                 <Pressable
                   key={c.id}
-                  style={styles.comment}
-                  onLongPress={() => reportComment(c)}
+                  style={[styles.comment, editingId === c.id && styles.commentEditing]}
+                  onLongPress={() => commentMenu(c)}
                   delayLongPress={400}
                 >
                   <Text style={styles.commentName}>
@@ -182,17 +262,25 @@ export default function CommentsModal({ visible, postId, postOwnerId, onClose, o
             )}
           </ScrollView>
 
+          {editingId && (
+            <View style={styles.editingBanner}>
+              <Text style={styles.editingText}>Editing comment</Text>
+              <TouchableOpacity onPress={cancelEdit} hitSlop={8}>
+                <Text style={styles.editingCancel}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          )}
           <View style={styles.inputRow}>
             <TextInput
               style={styles.input}
-              placeholder="Add a comment…"
+              placeholder={editingId ? 'Edit your comment…' : 'Add a comment…'}
               placeholderTextColor="#8899AA"
               value={body}
               onChangeText={setBody}
               multiline
             />
             <TouchableOpacity style={styles.sendButton} onPress={addComment} disabled={sending}>
-              <Text style={styles.sendText}>{sending ? '…' : 'Send'}</Text>
+              <Text style={styles.sendText}>{sending ? '…' : editingId ? 'Update' : 'Send'}</Text>
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
@@ -246,6 +334,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#1E1E1E',
   },
+  commentEditing: { borderColor: Colors.gold },
+  editingBanner: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+  },
+  editingText: { color: Colors.gold, fontSize: 13, fontWeight: '600' },
+  editingCancel: { color: '#8899AA', fontSize: 13, fontWeight: '600' },
   commentName: { color: Colors.cream, fontSize: 14, fontWeight: '600', marginBottom: 4 },
   commentBody: { color: '#C9D3DD', fontSize: 14, lineHeight: 20 },
   commentTime: { color: '#8899AA', fontSize: 12, marginTop: 6 },

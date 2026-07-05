@@ -10,6 +10,7 @@ import {
   Animated,
   Share,
   Alert,
+  InteractionManager,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -18,6 +19,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { File, Paths } from 'expo-file-system';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
+import { useUnits } from '../contexts/UnitsContext';
 import PostComposer from './components/PostComposer';
 import CommentsModal from './components/CommentsModal';
 import { REPORT_REASONS, reportContent, blockUser, getHiddenUserIds } from '../lib/safety';
@@ -45,8 +47,11 @@ function timeAgo(iso: string) {
 export default function FeedScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
+  const { formatDistance, formatDuration } = useUnits();
   const [activeFilter, setActiveFilter] = useState('All');
   const [posts, setPosts] = useState<any[]>([]);
+  // mirror of `posts` for use inside timers/effects that shouldn't re-subscribe
+  const postsRef = useRef<any[]>([]);
   const [showComposer, setShowComposer] = useState(false);
   const [commentsPostId, setCommentsPostId] = useState<string | null>(null);
   const [commentsPostOwnerId, setCommentsPostOwnerId] = useState<string | null>(null);
@@ -70,10 +75,22 @@ export default function FeedScreen() {
   }, []);
 
   // refresh the unread badge whenever Feed regains focus (e.g. after
-  // visiting Notifications, which marks everything read)
+  // visiting Notifications, which marks everything read).
+  // On BLUR (leaving Feed), close any open sheets — a transparent modal left
+  // mounted would keep capturing touches and make the feed feel "frozen".
   useFocusEffect(
     useCallback(() => {
-      loadUnreadCount();
+      // defer off the transition so the badge refresh can't deadlock the
+      // native stack when returning from Notifications (whole-app freeze)
+      const task = InteractionManager.runAfterInteractions(() => loadUnreadCount());
+      return () => {
+        task.cancel();
+        // updater form → React skips the re-render when nothing was open,
+        // so leaving Feed doesn't churn during the push transition
+        setCommentsPostId((v) => (v !== null ? null : v));
+        setShowComposer((v) => (v ? false : v));
+        setHighlightPostId((v) => (v !== null ? null : v));
+      };
     }, [])
   );
 
@@ -108,7 +125,7 @@ export default function FeedScreen() {
       highlightTimer = setTimeout(() => setHighlightPostId(null), 1600);
 
       if (route.params?.focusType === 'comment') {
-        const post = posts.find((p) => p.id === focusPostId);
+        const post = postsRef.current.find((p) => p.id === focusPostId);
         if (post) {
           setCommentsPostId(post.id);
           setCommentsPostOwnerId(post.user_id);
@@ -190,6 +207,7 @@ export default function FeedScreen() {
       };
     });
     setPosts(merged);
+    postsRef.current = merged;
   }
 
   async function onRefresh() {
@@ -343,8 +361,8 @@ export default function FeedScreen() {
 
           const detailParts: string[] = [];
           if (post.type === 'TRIP') {
-            if (post.duration_hours) detailParts.push(`${post.duration_hours}h`);
-            if (post.distance_km) detailParts.push(`${post.distance_km} km`);
+            if (post.duration_hours) detailParts.push(formatDuration(post.duration_hours));
+            if (post.distance_km) detailParts.push(formatDistance(post.distance_km));
             if (post.location) detailParts.push(post.location);
             if (post.conditions) detailParts.push(post.conditions);
           } else if (post.type === 'CATCH') {
@@ -373,9 +391,12 @@ export default function FeedScreen() {
                 <View style={[styles.badge, { backgroundColor: BADGE_COLORS[post.type] }]}>
                   <Text style={styles.badgeText}>{post.type}</Text>
                 </View>
-                <TouchableOpacity hitSlop={10} onPress={() => openPostMenu(post)} style={{ marginLeft: 8 }}>
-                  <Ionicons name="ellipsis-horizontal" size={20} color={Colors.muted} />
-                </TouchableOpacity>
+                {/* report/block only make sense on OTHER people's posts */}
+                {post.user_id !== currentUserId && (
+                  <TouchableOpacity hitSlop={10} onPress={() => openPostMenu(post)} style={{ marginLeft: 8 }}>
+                    <Ionicons name="ellipsis-horizontal" size={20} color={Colors.muted} />
+                  </TouchableOpacity>
+                )}
               </View>
 
               {detail ? <Text style={styles.detail}>{detail}</Text> : null}
@@ -420,10 +441,12 @@ export default function FeedScreen() {
 
               {/* caption */}
               <View style={styles.captionWrap}>
-                <Text style={styles.caption}>
-                  <Text style={styles.captionName}>{name} </Text>
-                  {post.caption}
-                </Text>
+                {post.caption ? (
+                  <Text style={styles.caption}>
+                    <Text style={styles.captionName}>{name} </Text>
+                    {post.caption}
+                  </Text>
+                ) : null}
                 {post.commentCount > 0 && (
                   <Text
                     style={styles.viewComments}

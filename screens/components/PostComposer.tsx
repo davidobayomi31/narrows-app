@@ -166,10 +166,7 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost, t
   async function handleSave() {
     if (saving) return; // guard against double-tap → double post
 
-    if (caption.trim().length === 0) {
-      Alert.alert('Add a caption', 'Please write a caption before posting.');
-      return;
-    }
+    // caption, hours and distance are all optional — users can post without them
 
     if (containsBlockedWords(caption)) {
       Alert.alert('Post not allowed', 'Your caption contains language that violates our community guidelines.');
@@ -200,7 +197,7 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost, t
       const fields = {
         type: TYPE_MAP[activeLog],
         conditions: activeLog === 'Trip' ? activeCondition : null,
-        caption: caption,
+        caption: caption.trim() || null,
         location: location || null,
         duration_hours: duration ? Number(duration) : null,
         distance_km: distance ? Number(distance) : null,

@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, InteractionManager } from 'react-native';
 import { useState, useCallback } from 'react';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
@@ -27,9 +27,15 @@ export default function NotificationsScreen() {
     });
   }
 
+  // Run the DB load + state update AFTER the push/pop animation finishes.
+  // Updating state mid-transition can deadlock the native stack (whole-app
+  // freeze) on the new architecture, especially on repeated navigation.
   useFocusEffect(
     useCallback(() => {
-      loadAndMarkRead();
+      const task = InteractionManager.runAfterInteractions(() => {
+        loadAndMarkRead();
+      });
+      return () => task.cancel();
     }, [])
   );
 

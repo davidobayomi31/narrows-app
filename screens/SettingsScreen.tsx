@@ -3,7 +3,36 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
+import { useUnits } from '../contexts/UnitsContext';
 import { PRIVACY_URL, TERMS_URL, COMMUNITY_GUIDELINES_URL } from '../constants/legal';
+
+// a small two-option segmented control used for the unit toggles
+function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: { label: string; value: T }[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <View style={styles.segment}>
+      {options.map((opt) => {
+        const active = opt.value === value;
+        return (
+          <TouchableOpacity
+            key={opt.value}
+            style={[styles.segmentItem, active && styles.segmentItemActive]}
+            onPress={() => onChange(opt.value)}
+          >
+            <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{opt.label}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
 
 function Row({
   icon,
@@ -27,6 +56,7 @@ function Row({
 
 export default function SettingsScreen() {
   const navigation = useNavigation<any>();
+  const { distanceUnit, timeUnit, setDistanceUnit, setTimeUnit } = useUnits();
 
   function logOut() {
     Alert.alert(
@@ -96,6 +126,32 @@ export default function SettingsScreen() {
         <Row icon="person-outline" label="Edit Profile" onPress={() => navigation.navigate('EditProfile')} />
       </View>
 
+      <Text style={styles.section}>UNITS</Text>
+      <View style={styles.group}>
+        <View style={styles.unitRow}>
+          <Text style={styles.rowLabel}>Distance</Text>
+          <Segmented
+            value={distanceUnit}
+            onChange={setDistanceUnit}
+            options={[
+              { label: 'Km', value: 'km' },
+              { label: 'Miles', value: 'mi' },
+            ]}
+          />
+        </View>
+        <View style={styles.unitRow}>
+          <Text style={styles.rowLabel}>Trip time</Text>
+          <Segmented
+            value={timeUnit}
+            onChange={setTimeUnit}
+            options={[
+              { label: 'Hours', value: 'hours' },
+              { label: 'Minutes', value: 'minutes' },
+            ]}
+          />
+        </View>
+      </View>
+
       <Text style={styles.section}>LEGAL</Text>
       <View style={styles.group}>
         <Row icon="shield-outline" label="Privacy Policy" onPress={() => Linking.openURL(PRIVACY_URL)} />
@@ -135,4 +191,26 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(255,255,255,0.06)',
   },
   rowLabel: { flex: 1, color: Colors.cream, fontSize: 16 },
+  unitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+  },
+  segment: {
+    flexDirection: 'row',
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: 10,
+    padding: 2,
+  },
+  segmentItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  segmentItemActive: { backgroundColor: Colors.gold },
+  segmentText: { color: Colors.muted, fontSize: 13, fontWeight: '600' },
+  segmentTextActive: { color: Colors.black, fontWeight: '700' },
 });

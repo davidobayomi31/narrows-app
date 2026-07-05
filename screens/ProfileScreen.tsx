@@ -15,6 +15,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
 import { friendlyError } from '../lib/errors';
+import { useUnits } from '../contexts/UnitsContext';
 import PostComposer from './components/PostComposer';
 
 const BADGE_COLORS: Record<string, string> = {
@@ -35,6 +36,7 @@ const TILE = (screenW - 32 - 16) / 3; // 16px side padding(32) + two 8px gaps(16
 
 export default function ProfileScreen() {
   const navigation = useNavigation<any>();
+  const { distanceUnit, timeUnit, distanceValue, durationValue } = useUnits();
   const [profile, setProfile] = useState<any>(null);
   const [myPosts, setMyPosts] = useState<any[]>([]);
   const [editingPost, setEditingPost] = useState<any>(null);
@@ -47,11 +49,14 @@ export default function ProfileScreen() {
     }, [])
   );
 
+  const totalDistanceKm = myPosts.reduce((s, p) => s + (p.distance_km || 0), 0);
+  const totalDurationHours = myPosts.reduce((s, p) => s + (p.duration_hours || 0), 0);
+
   const stats = [
     { label: 'Trips', value: String(myPosts.filter((p) => p.type === 'TRIP').length) },
     { label: 'Catches', value: String(myPosts.filter((p) => p.type === 'CATCH').length) },
-    { label: 'Km', value: String(Math.round(myPosts.reduce((s, p) => s + (p.distance_km || 0), 0) * 10) / 10) },
-    { label: 'Hours', value: String(Math.round(myPosts.reduce((s, p) => s + (p.duration_hours || 0), 0) * 10) / 10) },
+    { label: distanceUnit === 'mi' ? 'Miles' : 'Km', value: String(distanceValue(totalDistanceKm)) },
+    { label: timeUnit === 'minutes' ? 'Min' : 'Hours', value: String(durationValue(totalDurationHours)) },
   ];
 
   async function loadProfile() {
@@ -149,7 +154,12 @@ export default function ProfileScreen() {
         ) : (
           <View style={styles.grid}>
             {visiblePosts.map((post) => (
-              <TouchableOpacity key={post.id} style={styles.tile} onLongPress={() => postMenu(post)}>
+              <TouchableOpacity
+                key={post.id}
+                style={styles.tile}
+                onPress={() => navigation.navigate('PostDetail', { postId: post.id })}
+                onLongPress={() => postMenu(post)}
+              >
                 {post.image_url ? (
                   <Image source={{ uri: post.image_url }} style={styles.tileImage} />
                 ) : (

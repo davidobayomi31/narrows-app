@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   SafeAreaView,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
@@ -21,7 +22,7 @@ export default function ConfirmEmailScreen() {
 
   async function verifyCode() {
     // the code must be 6 digits
-    if (code.length !== 8) {
+    if (code.length !== 6) {
       setCodeError('Enter the 6-digit code from your email');
       return;
     }
@@ -42,6 +43,10 @@ export default function ConfirmEmailScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} hitSlop={12}>
+        <Ionicons name="chevron-back" size={26} color={Colors.cream} />
+        <Text style={styles.backText}>Back</Text>
+      </TouchableOpacity>
       <View style={styles.container}>
         <Text style={styles.title}>Check your email</Text>
         <Text style={styles.subtitle}>
@@ -53,7 +58,7 @@ export default function ConfirmEmailScreen() {
           placeholder="123456"
           placeholderTextColor="#8899AA"
           keyboardType="number-pad"
-          maxLength={8}
+          maxLength={6}
           value={code}
           onChangeText={setCode}
         />
@@ -71,6 +76,17 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  backText: {
+    color: Colors.cream,
+    fontSize: 16,
+    marginLeft: 2,
   },
   container: {
     flex: 1,
