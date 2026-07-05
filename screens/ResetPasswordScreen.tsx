@@ -24,8 +24,8 @@ export default function ResetPasswordScreen() {
   const [loading, setLoading] = useState(false);
 
   async function verifyCode() {
-    if (code.length !== 8) {
-      setCodeError('Enter the code from your email');
+    if (code.length !== 6) {
+      setCodeError('Enter the 6-digit code from your email');
       return;
     }
     setCodeError('');
@@ -54,10 +54,10 @@ export default function ResetPasswordScreen() {
 
         <TextInput
           style={[styles.input, styles.codeInput, codeError ? styles.inputError : null]}
-          placeholder="12345678"
+          placeholder="123456"
           placeholderTextColor="#8899AA"
           keyboardType="number-pad"
-          maxLength={8}
+          maxLength={6}
           value={code}
           onChangeText={setCode}
         />
