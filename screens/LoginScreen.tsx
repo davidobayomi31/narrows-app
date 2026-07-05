@@ -136,7 +136,7 @@ export default function LoginScreen() {
               <View style={styles.orLine} />
             </View>
             <AppleAuthentication.AppleAuthenticationButton
-              buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+              buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
               buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
               cornerRadius={12}
               style={styles.appleButton}
