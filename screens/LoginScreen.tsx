@@ -2,6 +2,7 @@ import {View, Text, StyleSheet, Image,TouchableOpacity,
   TextInput, KeyboardAvoidingView, Platform, ScrollView, Alert,  } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as AppleAuthentication from 'expo-apple-authentication';
@@ -9,6 +10,7 @@ import { useNavigation } from '@react-navigation/native';
 import {supabase}  from '../lib/supabase';
 import { friendlyError } from '../lib/errors'
 import { signInWithApple } from '../lib/appleAuth';
+import { signInWithGoogle } from '../lib/googleAuth';
 
 export default function LoginScreen() {
   // tracks what the user types in each field
@@ -27,6 +29,11 @@ export default function LoginScreen() {
 
   async function handleAppleSignIn() {
     const destination = await signInWithApple();
+    if (destination) navigation.navigate(destination);
+  }
+
+  async function handleGoogleSignIn() {
+    const destination = await signInWithGoogle();
     if (destination) navigation.navigate(destination);
   }
 
@@ -128,22 +135,26 @@ export default function LoginScreen() {
           <Text style={styles.loginButtonText}>Log In</Text>
         </TouchableOpacity>
 
+        <View style={styles.orRow}>
+          <View style={styles.orLine} />
+          <Text style={styles.orText}>or</Text>
+          <View style={styles.orLine} />
+        </View>
+
         {appleAvailable && (
-          <>
-            <View style={styles.orRow}>
-              <View style={styles.orLine} />
-              <Text style={styles.orText}>or</Text>
-              <View style={styles.orLine} />
-            </View>
-            <AppleAuthentication.AppleAuthenticationButton
-              buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
-              buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
-              cornerRadius={12}
-              style={styles.appleButton}
-              onPress={handleAppleSignIn}
-            />
-          </>
+          <AppleAuthentication.AppleAuthenticationButton
+            buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+            buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
+            cornerRadius={12}
+            style={styles.appleButton}
+            onPress={handleAppleSignIn}
+          />
         )}
+
+        <TouchableOpacity style={styles.googleButton} onPress={handleGoogleSignIn}>
+          <Ionicons name="logo-google" size={18} color={Colors.black} />
+          <Text style={styles.googleButtonText}>Continue with Google</Text>
+        </TouchableOpacity>
 
         {/* navigates to signup screen — navigation to be wired up later */}
         <TouchableOpacity 
@@ -290,7 +301,23 @@ const styles = StyleSheet.create({
   appleButton: {
     width: '100%',
     height: 50,
+    marginBottom: 12,
+  },
+  googleButton: {
+    width: '100%',
+    height: 50,
+    borderRadius: 12,
+    backgroundColor: Colors.white,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
     marginBottom: 24,
+  },
+  googleButtonText: {
+    color: Colors.black,
+    fontSize: 16,
+    fontWeight: '600',
   },
   signupRow: {
     marginTop: 8,

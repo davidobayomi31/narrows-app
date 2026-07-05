@@ -20,6 +20,7 @@ import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
 import { friendlyError } from '../lib/errors';
 import { signInWithApple } from '../lib/appleAuth';
+import { signInWithGoogle } from '../lib/googleAuth';
 import { PRIVACY_URL, TERMS_URL } from '../constants/legal';
 
 // structural email check: something@something.tld, no spaces
@@ -59,6 +60,11 @@ export default function SignupScreen() {
 
   async function handleAppleSignIn() {
     const destination = await signInWithApple();
+    if (destination) navigation.navigate(destination);
+  }
+
+  async function handleGoogleSignIn() {
+    const destination = await signInWithGoogle();
     if (destination) navigation.navigate(destination);
   }
 
@@ -268,22 +274,26 @@ if (lastName.trim().length < 1) {
           <Text style={styles.signupButtonText}>Create Account</Text>
         </TouchableOpacity>
 
+        <View style={styles.orRow}>
+          <View style={styles.orLine} />
+          <Text style={styles.orText}>or</Text>
+          <View style={styles.orLine} />
+        </View>
+
         {appleAvailable && (
-          <>
-            <View style={styles.orRow}>
-              <View style={styles.orLine} />
-              <Text style={styles.orText}>or</Text>
-              <View style={styles.orLine} />
-            </View>
-            <AppleAuthentication.AppleAuthenticationButton
-              buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
-              buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
-              cornerRadius={12}
-              style={styles.appleButton}
-              onPress={handleAppleSignIn}
-            />
-          </>
+          <AppleAuthentication.AppleAuthenticationButton
+            buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+            buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
+            cornerRadius={12}
+            style={styles.appleButton}
+            onPress={handleAppleSignIn}
+          />
         )}
+
+        <TouchableOpacity style={styles.googleButton} onPress={handleGoogleSignIn}>
+          <Ionicons name="logo-google" size={18} color={Colors.black} />
+          <Text style={styles.googleButtonText}>Continue with Google</Text>
+        </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.loginRow}
@@ -423,7 +433,23 @@ const styles = StyleSheet.create({
   appleButton: {
     width: '100%',
     height: 50,
+    marginBottom: 12,
+  },
+  googleButton: {
+    width: '100%',
+    height: 50,
+    borderRadius: 12,
+    backgroundColor: Colors.white,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
     marginBottom: 24,
+  },
+  googleButtonText: {
+    color: Colors.black,
+    fontSize: 16,
+    fontWeight: '600',
   },
   loginRow: {
     marginTop: 8,
