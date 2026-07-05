@@ -1,12 +1,14 @@
 import {View, Text, StyleSheet, Image,TouchableOpacity,
   TextInput, KeyboardAvoidingView, Platform, ScrollView, Alert,  } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Colors } from '../constants/colors';
 import * as LocalAuthentication from 'expo-local-authentication';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { useNavigation } from '@react-navigation/native';
 import {supabase}  from '../lib/supabase';
 import { friendlyError } from '../lib/errors'
+import { signInWithApple } from '../lib/appleAuth';
 
 export default function LoginScreen() {
   // tracks what the user types in each field
@@ -16,6 +18,17 @@ export default function LoginScreen() {
 
   // controls whether password characters are visible
   const [showPassword, setShowPassword] = useState(false);
+
+  // Sign in with Apple is only available on iOS 13+ hardware
+  const [appleAvailable, setAppleAvailable] = useState(false);
+  useEffect(() => {
+    AppleAuthentication.isAvailableAsync().then(setAppleAvailable);
+  }, []);
+
+  async function handleAppleSignIn() {
+    const destination = await signInWithApple();
+    if (destination) navigation.navigate(destination);
+  }
 
   // holds error messages shown below each input
   const [emailError, setEmailError] = useState('');
@@ -114,6 +127,23 @@ export default function LoginScreen() {
         <TouchableOpacity style={styles.loginButton} onPress={validateAndLogin}>
           <Text style={styles.loginButtonText}>Log In</Text>
         </TouchableOpacity>
+
+        {appleAvailable && (
+          <>
+            <View style={styles.orRow}>
+              <View style={styles.orLine} />
+              <Text style={styles.orText}>or</Text>
+              <View style={styles.orLine} />
+            </View>
+            <AppleAuthentication.AppleAuthenticationButton
+              buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+              buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
+              cornerRadius={12}
+              style={styles.appleButton}
+              onPress={handleAppleSignIn}
+            />
+          </>
+        )}
 
         {/* navigates to signup screen — navigation to be wired up later */}
         <TouchableOpacity 
@@ -248,6 +278,19 @@ const styles = StyleSheet.create({
     color: Colors.background,
     fontSize: 16,
     fontWeight: '700',
+  },
+  orRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 20,
+  },
+  orLine: { flex: 1, height: 1, backgroundColor: '#2E4057' },
+  orText: { color: '#8899AA', fontSize: 13, marginHorizontal: 12 },
+  appleButton: {
+    width: '100%',
+    height: 50,
+    marginBottom: 24,
   },
   signupRow: {
     marginTop: 8,

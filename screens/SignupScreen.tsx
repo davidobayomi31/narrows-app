@@ -11,13 +11,15 @@ import {
   Alert,
   Linking,
 } from 'react-native';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
 import { friendlyError } from '../lib/errors';
+import { signInWithApple } from '../lib/appleAuth';
 import { PRIVACY_URL, TERMS_URL } from '../constants/legal';
 
 // structural email check: something@something.tld, no spaces
@@ -48,6 +50,17 @@ export default function SignupScreen() {
   const [agreeError, setAgreeError] = useState('');
   const [confirmedAge, setConfirmedAge] = useState(false);
   const [ageError, setAgeError] = useState('');
+
+  // Sign in with Apple availability (iOS 13+ only)
+  const [appleAvailable, setAppleAvailable] = useState(false);
+  useEffect(() => {
+    AppleAuthentication.isAvailableAsync().then(setAppleAvailable);
+  }, []);
+
+  async function handleAppleSignIn() {
+    const destination = await signInWithApple();
+    if (destination) navigation.navigate(destination);
+  }
 
   // validates all fields before creating account
   async function validateAndSignup() {
@@ -255,6 +268,23 @@ if (lastName.trim().length < 1) {
           <Text style={styles.signupButtonText}>Create Account</Text>
         </TouchableOpacity>
 
+        {appleAvailable && (
+          <>
+            <View style={styles.orRow}>
+              <View style={styles.orLine} />
+              <Text style={styles.orText}>or</Text>
+              <View style={styles.orLine} />
+            </View>
+            <AppleAuthentication.AppleAuthenticationButton
+              buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_UP}
+              buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
+              cornerRadius={12}
+              style={styles.appleButton}
+              onPress={handleAppleSignIn}
+            />
+          </>
+        )}
+
         <TouchableOpacity
           style={styles.loginRow}
           onPress={() => navigation.navigate('Login')}
@@ -381,6 +411,19 @@ const styles = StyleSheet.create({
     color: Colors.background,
     fontSize: 16,
     fontWeight: '700',
+  },
+  orRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 20,
+  },
+  orLine: { flex: 1, height: 1, backgroundColor: '#2E4057' },
+  orText: { color: '#8899AA', fontSize: 13, marginHorizontal: 12 },
+  appleButton: {
+    width: '100%',
+    height: 50,
+    marginBottom: 24,
   },
   loginRow: {
     marginTop: 8,
