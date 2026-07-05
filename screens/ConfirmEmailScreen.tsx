@@ -59,6 +59,8 @@ export default function ConfirmEmailScreen() {
           placeholderTextColor="#8899AA"
           keyboardType="number-pad"
           maxLength={6}
+          textContentType="oneTimeCode"
+          autoComplete="one-time-code"
           value={code}
           onChangeText={setCode}
         />
