@@ -27,6 +27,7 @@ import CommentsModal from './components/CommentsModal';
 import ShareCapture from './components/ShareCapture';
 import { REPORT_REASONS, reportContent, blockUser, getHiddenUserIds } from '../lib/safety';
 import { shareToInstagramStory, shareToSnapchat } from '../lib/shareToSocial';
+import { FACEBOOK_APP_ID } from '../constants/social';
 
 const FILTER = ['All', 'Trips', 'Catches', 'Check-ins'];
 const FILTER_TYPE: Record<string, string> = { Trips: 'TRIP', Catches: 'CATCH', 'Check-ins': 'CHECK' };
@@ -253,13 +254,18 @@ export default function FeedScreen() {
     const timer = setTimeout(async () => {
       try {
         const watermarkedUri = await captureRef(shareCaptureRef, { format: 'jpg', quality: 0.9 });
-        Alert.alert('Share to…', undefined, [
-          {
+        const options: any[] = [];
+        // only offer Instagram Story once a real Facebook App ID is wired —
+        // otherwise the button would always fail. Keeps the review build clean.
+        if (FACEBOOK_APP_ID !== 'YOUR_FACEBOOK_APP_ID') {
+          options.push({
             text: 'Instagram Story',
             onPress: () => shareToInstagramStory(watermarkedUri).catch(() =>
               Alert.alert('Could not share', 'Instagram may not be installed.')
             ),
-          },
+          });
+        }
+        options.push(
           {
             text: 'Snapchat',
             onPress: () => shareToSnapchat(watermarkedUri).catch(() =>
@@ -270,8 +276,9 @@ export default function FeedScreen() {
             text: 'More options…',
             onPress: () => Share.share({ message: 'Shared via Narrows 🚤 narrows.site', url: watermarkedUri }),
           },
-          { text: 'Cancel', style: 'cancel' },
-        ]);
+          { text: 'Cancel', style: 'cancel' }
+        );
+        Alert.alert('Share to…', undefined, options);
       } catch {
         Alert.alert('Could not share', 'Something went wrong sharing this post.');
       } finally {
