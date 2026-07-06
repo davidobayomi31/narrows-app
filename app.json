@@ -79,7 +79,13 @@
           "isAndroidForegroundServiceEnabled": true
         }
       ],
-      "expo-video"
+      "expo-video",
+      [
+        "react-native-share",
+        {
+          "ios": ["instagram-stories", "snapchat"]
+        }
+      ]
     ]
   }
 }

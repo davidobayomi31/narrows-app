@@ -18,12 +18,15 @@ import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/nativ
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { File, Paths } from 'expo-file-system';
 import { useVideoPlayer, VideoView } from 'expo-video';
+import { captureRef } from 'react-native-view-shot';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
 import { useUnits } from '../contexts/UnitsContext';
 import PostComposer from './components/PostComposer';
 import CommentsModal from './components/CommentsModal';
+import ShareCapture from './components/ShareCapture';
 import { REPORT_REASONS, reportContent, blockUser, getHiddenUserIds } from '../lib/safety';
+import { shareToInstagramStory, shareToSnapchat } from '../lib/shareToSocial';
 
 const FILTER = ['All', 'Trips', 'Catches', 'Check-ins'];
 const FILTER_TYPE: Record<string, string> = { Trips: 'TRIP', Catches: 'CATCH', 'Check-ins': 'CHECK' };
@@ -70,6 +73,11 @@ export default function FeedScreen() {
   const [heartPostId, setHeartPostId] = useState<string | null>(null);
   const heartScale = useRef(new Animated.Value(0)).current;
   const logoPulse = useRef(new Animated.Value(1)).current;
+
+  // share flow: a photo gets downloaded + rendered into the hidden
+  // ShareCapture view, watermarked via view-shot, then handed to the chosen destination
+  const [shareSourceUri, setShareSourceUri] = useState<string | null>(null);
+  const shareCaptureRef = useRef<View>(null);
 
   useEffect(() => {
     loadPosts();
@@ -217,23 +225,61 @@ export default function FeedScreen() {
     setRefreshing(false);
   }
 
-  // downloads the post photo locally (if any) so it can be attached to the
-  // native share sheet, then shares it with a Narrows text tag
+  // videos and caption-only posts skip the watermark step (no image to stamp)
+  // and go straight to the OS share sheet. Photo posts get watermarked first —
+  // see the shareSourceUri effect below, which finishes the flow once captured.
   async function sharePost(post: any) {
     try {
-      let localUri: string | undefined;
-      if (post.image_url) {
-        const file = await File.downloadFileAsync(post.image_url, Paths.cache);
-        localUri = file.uri;
+      if (post.video_url) {
+        const file = await File.downloadFileAsync(post.video_url, Paths.cache);
+        await Share.share({ message: 'Shared via Narrows 🚤 narrows.site', url: file.uri });
+        return;
       }
-      await Share.share({
-        message: `${post.caption ? post.caption + '\n\n' : ''}Shared via Narrows 🚤 narrows.site`,
-        url: localUri,
-      });
+      if (!post.image_url) {
+        await Share.share({ message: `${post.caption ? post.caption + '\n\n' : ''}Shared via Narrows 🚤 narrows.site` });
+        return;
+      }
+      const file = await File.downloadFileAsync(post.image_url, Paths.cache);
+      setShareSourceUri(file.uri);
     } catch (e: any) {
       Alert.alert('Could not share', 'Something went wrong sharing this post.');
     }
   }
+
+  // fires once the hidden ShareCapture view has actually rendered the downloaded
+  // photo — captures the watermarked composite, then offers where to send it.
+  useEffect(() => {
+    if (!shareSourceUri) return;
+    const timer = setTimeout(async () => {
+      try {
+        const watermarkedUri = await captureRef(shareCaptureRef, { format: 'jpg', quality: 0.9 });
+        Alert.alert('Share to…', undefined, [
+          {
+            text: 'Instagram Story',
+            onPress: () => shareToInstagramStory(watermarkedUri).catch(() =>
+              Alert.alert('Could not share', 'Instagram may not be installed.')
+            ),
+          },
+          {
+            text: 'Snapchat',
+            onPress: () => shareToSnapchat(watermarkedUri).catch(() =>
+              Alert.alert('Could not share', 'Snapchat may not be installed.')
+            ),
+          },
+          {
+            text: 'More options…',
+            onPress: () => Share.share({ message: 'Shared via Narrows 🚤 narrows.site', url: watermarkedUri }),
+          },
+          { text: 'Cancel', style: 'cancel' },
+        ]);
+      } catch {
+        Alert.alert('Could not share', 'Something went wrong sharing this post.');
+      } finally {
+        setShareSourceUri(null);
+      }
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [shareSourceUri]);
 
   // "⋯" menu on a post: report it, and (if it's not yours) block the author.
   function openPostMenu(post: any) {
@@ -486,6 +532,11 @@ export default function FeedScreen() {
         onClose={() => setCommentsPostId(null)}
         onCommentAdded={loadPosts}
       />
+
+      {/* hidden off-screen watermark composite, captured by sharePost() above */}
+      <View style={styles.shareCaptureHost} pointerEvents="none">
+        <ShareCapture ref={shareCaptureRef} imageUri={shareSourceUri} />
+      </View>
     </SafeAreaView>
   );
 }
@@ -587,6 +638,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 6,
   },
+  shareCaptureHost: { position: 'absolute', top: -10000, left: 0 },
 
   actions: { flexDirection: 'row', gap: 18, paddingHorizontal: 12, paddingTop: 10 },
   actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
