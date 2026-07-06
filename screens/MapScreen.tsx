@@ -355,7 +355,7 @@ const styles = StyleSheet.create({
 
   tripBtn: {
     position: 'absolute',
-    bottom: 30,
+    bottom: 110,
     alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
