@@ -5,23 +5,34 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // only change how it's DISPLAYED. Toggling here updates the whole app instantly.
 export type DistanceUnit = 'km' | 'mi';
 export type TimeUnit = 'hours' | 'minutes';
+// speed is read live from GPS in metres/second; these are display choices.
+export type SpeedUnit = 'kmh' | 'mph' | 'kn';
 
 const KM_TO_MI = 0.621371;
+// metres-per-second → display unit
+const MS_TO_KMH = 3.6;
+const MS_TO_MPH = 2.236936;
+const MS_TO_KN = 1.943844;
 const STORAGE_KEY = 'narrows.units';
 
 type UnitsContextValue = {
   distanceUnit: DistanceUnit;
   timeUnit: TimeUnit;
+  speedUnit: SpeedUnit;
   setDistanceUnit: (u: DistanceUnit) => void;
   setTimeUnit: (u: TimeUnit) => void;
+  setSpeedUnit: (u: SpeedUnit) => void;
   // formatters — pass the raw metric value stored in the DB
   formatDistance: (km: number) => string;
   formatDuration: (hours: number) => string;
+  // speed comes straight from GPS in metres/second (may be null/negative when unknown)
+  formatSpeed: (metersPerSecond: number | null | undefined) => string;
   // raw converted numbers (no unit label) + the label, for stat cells
   distanceValue: (km: number) => number;
   durationValue: (hours: number) => number;
   distanceLabel: string; // 'km' | 'mi'
   timeLabel: string; // 'Hours' | 'Min'
+  speedLabel: string; // 'km/h' | 'mph' | 'kn'
 };
 
 const UnitsContext = createContext<UnitsContextValue | undefined>(undefined);
@@ -34,6 +45,7 @@ function round(n: number, dp = 1) {
 export function UnitsProvider({ children }: { children: ReactNode }) {
   const [distanceUnit, setDistanceUnitState] = useState<DistanceUnit>('km');
   const [timeUnit, setTimeUnitState] = useState<TimeUnit>('hours');
+  const [speedUnit, setSpeedUnitState] = useState<SpeedUnit>('kmh');
 
   // load saved preference once on startup
   useEffect(() => {
@@ -44,6 +56,7 @@ export function UnitsProvider({ children }: { children: ReactNode }) {
           const saved = JSON.parse(raw);
           if (saved.distanceUnit) setDistanceUnitState(saved.distanceUnit);
           if (saved.timeUnit) setTimeUnitState(saved.timeUnit);
+          if (saved.speedUnit) setSpeedUnitState(saved.speedUnit);
         }
       } catch {
         // ignore — fall back to defaults
@@ -51,7 +64,7 @@ export function UnitsProvider({ children }: { children: ReactNode }) {
     })();
   }, []);
 
-  async function persist(next: { distanceUnit: DistanceUnit; timeUnit: TimeUnit }) {
+  async function persist(next: { distanceUnit: DistanceUnit; timeUnit: TimeUnit; speedUnit: SpeedUnit }) {
     try {
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     } catch {
@@ -61,12 +74,17 @@ export function UnitsProvider({ children }: { children: ReactNode }) {
 
   function setDistanceUnit(u: DistanceUnit) {
     setDistanceUnitState(u);
-    persist({ distanceUnit: u, timeUnit });
+    persist({ distanceUnit: u, timeUnit, speedUnit });
   }
 
   function setTimeUnit(u: TimeUnit) {
     setTimeUnitState(u);
-    persist({ distanceUnit, timeUnit: u });
+    persist({ distanceUnit, timeUnit: u, speedUnit });
+  }
+
+  function setSpeedUnit(u: SpeedUnit) {
+    setSpeedUnitState(u);
+    persist({ distanceUnit, timeUnit, speedUnit: u });
   }
 
   function distanceValue(km: number) {
@@ -85,17 +103,30 @@ export function UnitsProvider({ children }: { children: ReactNode }) {
     return timeUnit === 'minutes' ? `${durationValue(hours)} min` : `${durationValue(hours)}h`;
   }
 
+  const speedLabel = speedUnit === 'mph' ? 'mph' : speedUnit === 'kn' ? 'kn' : 'km/h';
+
+  function formatSpeed(metersPerSecond: number | null | undefined) {
+    // GPS reports null (or a negative sentinel) when speed is unavailable/stationary
+    const mps = metersPerSecond != null && metersPerSecond > 0 ? metersPerSecond : 0;
+    const factor = speedUnit === 'mph' ? MS_TO_MPH : speedUnit === 'kn' ? MS_TO_KN : MS_TO_KMH;
+    return `${round(mps * factor)} ${speedLabel}`;
+  }
+
   const value: UnitsContextValue = {
     distanceUnit,
     timeUnit,
+    speedUnit,
     setDistanceUnit,
     setTimeUnit,
+    setSpeedUnit,
     formatDistance,
     formatDuration,
+    formatSpeed,
     distanceValue,
     durationValue,
     distanceLabel: distanceUnit,
     timeLabel: timeUnit === 'minutes' ? 'Min' : 'Hours',
+    speedLabel,
   };
 
   return <UnitsContext.Provider value={value}>{children}</UnitsContext.Provider>;

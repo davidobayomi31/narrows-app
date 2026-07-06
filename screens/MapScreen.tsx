@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,12 +12,13 @@ import {
 } from 'react-native';
 import MapView, { Marker, LongPressEvent, Callout } from 'react-native-maps';
 import * as Location from 'expo-location';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
 import { friendlyError } from '../lib/errors';
 import { Ionicons } from '@expo/vector-icons';
 import { useTrip } from '../contexts/TripContext';
+import { useUnits } from '../contexts/UnitsContext';
 import PostComposer from './components/PostComposer';
 
 type MarinaPin = {
@@ -58,9 +59,12 @@ function timeAgo(iso: string) {
 export default function MapScreen() {
   const navigation = useNavigation<any>();
   const { isTracking, elapsedSeconds, distanceKm, startTrip, endTrip } = useTrip();
+  const { formatSpeed } = useUnits();
   const [pins, setPins] = useState<CatchPin[]>([]);
   const [marinas, setMarinas] = useState<MarinaPin[]>([]);
   const [hasLocationPerm, setHasLocationPerm] = useState(false);
+  const [speedMps, setSpeedMps] = useState<number | null>(null);
+  const speedSubRef = useRef<Location.LocationSubscription | null>(null);
   const [mapType, setMapType] = useState<'standard' | 'satellite'>('standard');
   const [userId, setUserId] = useState<string | null>(null);
 
@@ -93,6 +97,28 @@ export default function MapScreen() {
     const { status } = await Location.requestForegroundPermissionsAsync();
     setHasLocationPerm(status === 'granted');
   }
+
+  // live speed readout — only while the Map tab is focused (saves battery on
+  // other tabs). GPS gives coords.speed in m/s; UnitsContext formats it.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      (async () => {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status !== 'granted' || !active) return;
+        speedSubRef.current = await Location.watchPositionAsync(
+          { accuracy: Location.Accuracy.High, distanceInterval: 5, timeInterval: 2000 },
+          (loc) => setSpeedMps(loc.coords.speed)
+        );
+      })();
+      return () => {
+        active = false;
+        speedSubRef.current?.remove();
+        speedSubRef.current = null;
+        setSpeedMps(null);
+      };
+    }, [])
+  );
 
   // load everyone's catch pins (community layer)
   async function loadPins() {
@@ -265,6 +291,14 @@ export default function MapScreen() {
         <Ionicons name={mapType === 'standard' ? 'earth' : 'map'} size={20} color={Colors.cream} />
       </TouchableOpacity>
 
+      {/* live speed readout — top-right under the map-type toggle */}
+      {hasLocationPerm && (
+        <View style={styles.speedBox} pointerEvents="none">
+          <Text style={styles.speedValue}>{formatSpeed(speedMps)}</Text>
+          <Text style={styles.speedCaption}>SPEED</Text>
+        </View>
+      )}
+
       {/* new-pin composer */}
       <Modal
         visible={showComposer}
@@ -417,6 +451,19 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 10,
   },
+  speedBox: {
+    position: 'absolute',
+    top: 112,
+    right: 16,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    minWidth: 84,
+  },
+  speedValue: { color: Colors.gold, fontSize: 18, fontWeight: '800' },
+  speedCaption: { color: Colors.cream, fontSize: 10, fontWeight: '700', letterSpacing: 1, marginTop: 2 },
   saveText: { color: Colors.black, fontWeight: '700', fontSize: 15 },
   callout: { width: 200, paddingVertical: 4, paddingHorizontal: 2 },
   calloutTitle: { fontWeight: '700', fontSize: 14, color: '#111', marginBottom: 2 },

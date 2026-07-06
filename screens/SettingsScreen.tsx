@@ -56,7 +56,7 @@ function Row({
 
 export default function SettingsScreen() {
   const navigation = useNavigation<any>();
-  const { distanceUnit, timeUnit, setDistanceUnit, setTimeUnit } = useUnits();
+  const { distanceUnit, timeUnit, speedUnit, setDistanceUnit, setTimeUnit, setSpeedUnit } = useUnits();
 
   function logOut() {
     Alert.alert(
@@ -147,6 +147,18 @@ export default function SettingsScreen() {
             options={[
               { label: 'Hours', value: 'hours' },
               { label: 'Minutes', value: 'minutes' },
+            ]}
+          />
+        </View>
+        <View style={styles.unitRow}>
+          <Text style={styles.rowLabel}>Speed</Text>
+          <Segmented
+            value={speedUnit}
+            onChange={setSpeedUnit}
+            options={[
+              { label: 'km/h', value: 'kmh' },
+              { label: 'mph', value: 'mph' },
+              { label: 'kn', value: 'kn' },
             ]}
           />
         </View>
