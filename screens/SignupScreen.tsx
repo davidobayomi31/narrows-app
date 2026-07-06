@@ -58,14 +58,49 @@ export default function SignupScreen() {
     AppleAuthentication.isAvailableAsync().then(setAppleAvailable);
   }, []);
 
+  // Age + Terms consent must be given before ANY signup method — including
+  // Apple/Google — for legal validity and App Store compliance. Returns true
+  // if both boxes are checked, otherwise shows the errors and returns false.
+  function hasGivenConsent(): boolean {
+    let ok = true;
+    if (!confirmedAge) {
+      setAgeError('You must be at least 13 years old to use Narrows');
+      ok = false;
+    } else {
+      setAgeError('');
+    }
+    if (!agreedToTerms) {
+      setAgreeError('You must agree to the Terms of Service and Privacy Policy');
+      ok = false;
+    } else {
+      setAgreeError('');
+    }
+    return ok;
+  }
+
+  // records that consent was given, on the authenticated user's account
+  async function recordConsent() {
+    await supabase.auth.updateUser({
+      data: { age_confirmed: true, terms_accepted_at: new Date().toISOString() },
+    });
+  }
+
   async function handleAppleSignIn() {
+    if (!hasGivenConsent()) return;
     const destination = await signInWithApple();
-    if (destination) navigation.navigate(destination);
+    if (destination) {
+      await recordConsent();
+      navigation.navigate(destination);
+    }
   }
 
   async function handleGoogleSignIn() {
+    if (!hasGivenConsent()) return;
     const destination = await signInWithGoogle();
-    if (destination) navigation.navigate(destination);
+    if (destination) {
+      await recordConsent();
+      navigation.navigate(destination);
+    }
   }
 
   // validates all fields before creating account
@@ -134,6 +169,9 @@ if (lastName.trim().length < 1) {
                 data: {
                     first_name: firstName,
                     last_name: lastName,
+                    // consent captured here — lets Onboarding skip re-asking
+                    age_confirmed: true,
+                    terms_accepted_at: new Date().toISOString(),
                 },
             },
         });

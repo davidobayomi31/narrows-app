@@ -1,10 +1,12 @@
-import { View, Text, StyleSheet,TouchableOpacity,Alert } from 'react-native';
+import { View, Text, StyleSheet,TouchableOpacity,Alert, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import {useState} from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import {useState, useEffect} from 'react';
 import {useNavigation} from '@react-navigation/native';
 import {Colors} from '../constants/colors';
 import {supabase} from '../lib/supabase';
 import { friendlyError } from '../lib/errors';
+import { PRIVACY_URL, TERMS_URL } from '../constants/legal';
 
 export default function OnboardingScreen(){
     const navigation = useNavigation <any>();
@@ -15,6 +17,30 @@ export default function OnboardingScreen(){
     const[ownsBoat, setOwnsBoat] = useState<string | null >(null);
     const[region, setRegion] = useState<string | null > (null);
     const[exprience, setExprience] = useState<string | null>(null);
+
+    // Mandatory consent gate — every new user must confirm age + terms here,
+    // UNLESS they already agreed on the signup screen (recorded in metadata).
+    const [checkingConsent, setCheckingConsent] = useState(true);
+    const [consentDone, setConsentDone] = useState(false);
+    const [ageChecked, setAgeChecked] = useState(false);
+    const [termsChecked, setTermsChecked] = useState(false);
+
+    useEffect(() => {
+        (async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            // already consented (email/social signup users) → skip the gate
+            if (user?.user_metadata?.terms_accepted_at) setConsentDone(true);
+            setCheckingConsent(false);
+        })();
+    }, []);
+
+    async function acceptConsent() {
+        if (!ageChecked || !termsChecked) return;
+        await supabase.auth.updateUser({
+            data: { age_confirmed: true, terms_accepted_at: new Date().toISOString() },
+        });
+        setConsentDone(true);
+    }
 
     async function save_profile() {
         // get currently loggin user
@@ -49,6 +75,46 @@ export default function OnboardingScreen(){
     function handleSkip(){
         handleNext();
     }
+    // while we check whether consent was already given, render nothing (avoids flicker)
+    if (checkingConsent) {
+        return <SafeAreaView style={styles.safeArea} />;
+    }
+
+    // mandatory consent gate for users who haven't agreed yet
+    if (!consentDone) {
+        return (
+            <SafeAreaView style={styles.safeArea}>
+                <View style={styles.container}>
+                    <Text style={styles.question}>Before you start</Text>
+                    <Text style={styles.subtitle}>Please confirm the following to use Narrows.</Text>
+
+                    <TouchableOpacity style={styles.consentRow} onPress={() => setAgeChecked(!ageChecked)} activeOpacity={0.7}>
+                        <Ionicons name={ageChecked ? 'checkbox' : 'square-outline'} size={24} color={ageChecked ? Colors.gold : '#8899AA'} />
+                        <Text style={styles.consentText}>I confirm I am at least 13 years old.</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.consentRow} onPress={() => setTermsChecked(!termsChecked)} activeOpacity={0.7}>
+                        <Ionicons name={termsChecked ? 'checkbox' : 'square-outline'} size={24} color={termsChecked ? Colors.gold : '#8899AA'} />
+                        <Text style={styles.consentText}>
+                            I agree to the{' '}
+                            <Text style={styles.link} onPress={() => Linking.openURL(TERMS_URL)}>Terms of Service</Text>
+                            {' '}and{' '}
+                            <Text style={styles.link} onPress={() => Linking.openURL(PRIVACY_URL)}>Privacy Policy</Text>.
+                        </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.nextButton, (!ageChecked || !termsChecked) && styles.nextButtonDisabled]}
+                        onPress={acceptConsent}
+                        disabled={!ageChecked || !termsChecked}
+                    >
+                        <Text style={styles.nextButtonText}>Continue</Text>
+                    </TouchableOpacity>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
     return (
         <SafeAreaView style={styles.safeArea}>
             <View style={styles.container}>
@@ -214,6 +280,26 @@ const styles = StyleSheet.create({
     color: Colors.background,
     fontSize: 16,
     fontWeight: '700',
+  },
+  nextButtonDisabled: {
+    opacity: 0.4,
+  },
+  consentRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 20,
+    paddingRight: 8,
+  },
+  consentText: {
+    flex: 1,
+    color: Colors.cream,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  link: {
+    color: Colors.gold,
+    fontWeight: '600',
   },
   skipButton: {
     alignItems: 'center',
