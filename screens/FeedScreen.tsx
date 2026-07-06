@@ -17,6 +17,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { File, Paths } from 'expo-file-system';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
 import { useUnits } from '../contexts/UnitsContext';
@@ -401,8 +402,17 @@ export default function FeedScreen() {
 
               {detail ? <Text style={styles.detail}>{detail}</Text> : null}
 
-              {/* full-bleed image */}
-              {post.image_url ? (
+              {/* full-bleed media */}
+              {post.video_url ? (
+                <Pressable onPress={() => handleDoubleTap(post)}>
+                  <FeedVideoPost uri={post.video_url} style={styles.postImage} />
+                  {heartPostId === post.id && (
+                    <Animated.View style={[styles.heartOverlay, { transform: [{ scale: heartScale }] }]}>
+                      <MaterialCommunityIcons name="anchor" size={96} color="rgba(255,255,255,0.95)" />
+                    </Animated.View>
+                  )}
+                </Pressable>
+              ) : post.image_url ? (
                 <Pressable onPress={() => handleDoubleTap(post)}>
                   <Image source={{ uri: post.image_url }} style={styles.postImage} />
                   {heartPostId === post.id && (
@@ -480,6 +490,33 @@ export default function FeedScreen() {
   );
 }
 
+// autoplays muted + looping (Instagram-style); tap the speaker to hear it.
+function FeedVideoPost({ uri, style }: { uri: string; style: any }) {
+  const [muted, setMuted] = useState(true);
+  const player = useVideoPlayer(uri, (p) => {
+    p.loop = true;
+    p.muted = true;
+    p.play();
+  });
+
+  useEffect(() => {
+    player.muted = muted;
+  }, [muted, player]);
+
+  return (
+    <View style={style}>
+      <VideoView player={player} style={{ flex: 1 }} contentFit="cover" nativeControls={false} />
+      <TouchableOpacity
+        style={styles.muteButton}
+        hitSlop={10}
+        onPress={() => setMuted((m) => !m)}
+      >
+        <Ionicons name={muted ? 'volume-mute' : 'volume-high'} size={18} color={Colors.white} />
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: Colors.background },
 
@@ -542,6 +579,14 @@ const styles = StyleSheet.create({
   detail: { color: Colors.gold, fontSize: 13, fontWeight: '600', paddingHorizontal: 12, marginBottom: 8 },
 
   postImage: { width: '100%', aspectRatio: 1, backgroundColor: Colors.surface },
+  muteButton: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 16,
+    padding: 6,
+  },
 
   actions: { flexDirection: 'row', gap: 18, paddingHorizontal: 12, paddingTop: 10 },
   actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },

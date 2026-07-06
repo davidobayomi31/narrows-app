@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
@@ -139,7 +140,12 @@ export default function MarinaProfileScreen() {
             <View style={styles.grid}>
               {posts.map((post) => (
                 <View key={post.id} style={styles.tile}>
-                  {post.image_url ? (
+                  {post.video_url ? (
+                    <View style={styles.tileImage}>
+                      <VideoThumb uri={post.video_url} />
+                      <Ionicons name="play-circle" size={22} color="rgba(255,255,255,0.9)" style={styles.tilePlayIcon} />
+                    </View>
+                  ) : post.image_url ? (
                     <Image source={{ uri: post.image_url }} style={styles.tileImage} />
                   ) : (
                     <View style={styles.tileFallback}>
@@ -157,6 +163,12 @@ export default function MarinaProfileScreen() {
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+// paused first-frame thumbnail for a video post tile in the grid.
+function VideoThumb({ uri }: { uri: string }) {
+  const player = useVideoPlayer(uri);
+  return <VideoView player={player} style={{ width: '100%', height: '100%' }} contentFit="cover" nativeControls={false} />;
 }
 
 const styles = StyleSheet.create({
@@ -210,6 +222,7 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   tile: { width: TILE, height: TILE, borderRadius: 12, overflow: 'hidden', backgroundColor: Colors.surface },
   tileImage: { width: '100%', height: '100%' },
+  tilePlayIcon: { position: 'absolute', top: 6, right: 6 },
   tileFallback: { flex: 1, padding: 8 },
   tileBadge: { alignSelf: 'flex-start', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginBottom: 6 },
   tileBadgeText: { color: Colors.white, fontSize: 9, fontWeight: '700' },

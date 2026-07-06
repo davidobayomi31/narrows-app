@@ -16,6 +16,18 @@ const BLOCKED_WORDS = [
   'whore',
   'slut',
   'cunt',
+  // general profanity (distinct from the slurs above, same word-boundary matching)
+  'fuck',
+  'fucking',
+  'fucked',
+  'motherfucker',
+  'shit',
+  'bullshit',
+  'asshole',
+  'bastard',
+  'dick',
+  'piss',
+  'bitch',
 ];
 
 const BLOCKED_PATTERN = new RegExp(`\\b(${BLOCKED_WORDS.join('|')})\\b`, 'i');

@@ -9,10 +9,11 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { File, Paths } from 'expo-file-system';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
 import { useUnits } from '../contexts/UnitsContext';
@@ -152,7 +153,9 @@ export default function PostDetailScreen() {
 
           {detail ? <Text style={styles.detail}>{detail}</Text> : null}
 
-          {post.image_url ? (
+          {post.video_url ? (
+            <DetailVideoPost uri={post.video_url} style={styles.postImage} />
+          ) : post.image_url ? (
             <Image source={{ uri: post.image_url }} style={styles.postImage} />
           ) : null}
 
@@ -193,6 +196,33 @@ export default function PostDetailScreen() {
   );
 }
 
+// autoplays muted + looping (Instagram-style); tap the speaker to hear it.
+function DetailVideoPost({ uri, style }: { uri: string; style: any }) {
+  const [muted, setMuted] = useState(true);
+  const player = useVideoPlayer(uri, (p) => {
+    p.loop = true;
+    p.muted = true;
+    p.play();
+  });
+
+  useEffect(() => {
+    player.muted = muted;
+  }, [muted, player]);
+
+  return (
+    <View style={style}>
+      <VideoView player={player} style={{ flex: 1 }} contentFit="cover" nativeControls={false} />
+      <TouchableOpacity
+        style={styles.muteButton}
+        hitSlop={10}
+        onPress={() => setMuted((m) => !m)}
+      >
+        <Ionicons name={muted ? 'volume-mute' : 'volume-high'} size={18} color={Colors.white} />
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: Colors.background },
   topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 6 },
@@ -211,6 +241,14 @@ const styles = StyleSheet.create({
 
   detail: { color: Colors.gold, fontSize: 13, fontWeight: '600', paddingHorizontal: 12, marginBottom: 8 },
   postImage: { width: '100%', aspectRatio: 1, backgroundColor: Colors.surface },
+  muteButton: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 16,
+    padding: 6,
+  },
 
   actions: { flexDirection: 'row', gap: 18, paddingHorizontal: 12, paddingTop: 10 },
   actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },

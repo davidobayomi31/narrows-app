@@ -16,6 +16,7 @@ import { useState, useEffect } from 'react';
 import { Colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
 import * as ImagePicker from 'expo-image-picker';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { friendlyError } from '../../lib/errors';
 import { containsBlockedWords } from '../../lib/moderation';
 
@@ -23,6 +24,11 @@ import { containsBlockedWords } from '../../lib/moderation';
 // Photos are already compressed at quality 0.7, so this only catches extremes.
 const MAX_IMAGE_MB = 8;
 const MAX_IMAGE_BYTES = MAX_IMAGE_MB * 1024 * 1024;
+
+// videos are capped at 15s of capture (below) plus a hard byte cap as a backstop.
+const MAX_VIDEO_SECONDS = 15;
+const MAX_VIDEO_MB = 50;
+const MAX_VIDEO_BYTES = MAX_VIDEO_MB * 1024 * 1024;
 
 const LOG_TYPES = ['Trip', 'Catch', 'Check-in'];
 const CONDITIONS = ['GREAT', 'MIXED', 'ROUGH'];
@@ -67,7 +73,8 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost, t
   const [weight, setWeight] = useState('');
   const [length, setLength] = useState('');
   const [released, setReleased] = useState(false);
-  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [mediaUri, setMediaUri] = useState<string | null>(null);
+  const [mediaType, setMediaType] = useState<'image' | 'video'>('image');
   const [viewImageUri, setViewImageUri] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -85,7 +92,13 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost, t
       setWeight(editingPost.weight_lbs != null ? String(editingPost.weight_lbs) : '');
       setLength(editingPost.length_in != null ? String(editingPost.length_in) : '');
       setReleased(editingPost.released ?? false);
-      setImageUri(editingPost.image_url ?? null);
+      if (editingPost.video_url) {
+        setMediaUri(editingPost.video_url);
+        setMediaType('video');
+      } else {
+        setMediaUri(editingPost.image_url ?? null);
+        setMediaType('image');
+      }
     } else {
       setActiveLog('Trip');
       setActiveCondition('GREAT');
@@ -97,13 +110,15 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost, t
       setWeight('');
       setLength('');
       setReleased(false);
-      setImageUri(null);
+      setMediaUri(null);
+      setMediaType('image');
     }
   }, [visible, editingPost, tripPrefill]);
 
   function pickImage() {
-    Alert.alert('Add Photo', undefined, [
+    Alert.alert('Add Media', undefined, [
       { text: 'Take Photo', onPress: takePhoto },
+      { text: 'Record Video', onPress: recordVideo },
       { text: 'Choose from Library', onPress: pickFromLibrary },
       { text: 'Cancel', style: 'cancel' },
     ]);
@@ -115,27 +130,51 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost, t
       Alert.alert('Permition needed.', 'Camera permission is needed to take a photo');
       return;
     }
-    const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
-    if (!result.canceled && !isImageTooLarge(result.assets[0].fileSize)) {
-      setImageUri(result.assets[0].uri);
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.7 });
+    if (!result.canceled && !isMediaTooLarge('image', result.assets[0].fileSize)) {
+      setMediaUri(result.assets[0].uri);
+      setMediaType('image');
+    }
+  }
+
+  async function recordVideo() {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Permition needed.', 'Camera permission is needed to record a video');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['videos'],
+      videoMaxDuration: MAX_VIDEO_SECONDS,
+      quality: 0.7,
+    });
+    if (!result.canceled && !isMediaTooLarge('video', result.assets[0].fileSize)) {
+      setMediaUri(result.assets[0].uri);
+      setMediaType('video');
     }
   }
 
   async function pickFromLibrary() {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
+      mediaTypes: ['images', 'videos'],
+      videoMaxDuration: MAX_VIDEO_SECONDS,
       quality: 0.7,
     });
-    if (!result.canceled && !isImageTooLarge(result.assets[0].fileSize)) {
-      setImageUri(result.assets[0].uri);
-    }
+    if (result.canceled) return;
+    const asset = result.assets[0];
+    const type = asset.type === 'video' ? 'video' : 'image';
+    if (isMediaTooLarge(type, asset.fileSize)) return;
+    setMediaUri(asset.uri);
+    setMediaType(type);
   }
 
   // returns true (and warns) if the picked file is over the cap. fileSize may
-  // be undefined on some platforms — uploadImage has a hard backstop for that.
-  function isImageTooLarge(fileSize?: number | null): boolean {
-    if (fileSize != null && fileSize > MAX_IMAGE_BYTES) {
-      Alert.alert('Photo too large', `Please choose a photo under ${MAX_IMAGE_MB} MB.`);
+  // be undefined on some platforms — uploadImage/uploadVideo has a hard backstop for that.
+  function isMediaTooLarge(type: 'image' | 'video', fileSize?: number | null): boolean {
+    const capBytes = type === 'video' ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
+    const capMb = type === 'video' ? MAX_VIDEO_MB : MAX_IMAGE_MB;
+    if (fileSize != null && fileSize > capBytes) {
+      Alert.alert(type === 'video' ? 'Video too large' : 'Photo too large', `Please choose a ${type} under ${capMb} MB.`);
       return true;
     }
     return false;
@@ -163,6 +202,28 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost, t
     return data.publicUrl;
   }
 
+  async function uploadVideo(uri: string) {
+    const arraybuffer = await fetch(uri).then((res) => res.arrayBuffer());
+    if (arraybuffer.byteLength > MAX_VIDEO_BYTES) {
+      Alert.alert('Video too large', `Please choose a video under ${MAX_VIDEO_MB} MB.`);
+      return null;
+    }
+    const ext = uri.split('.').pop()?.toLowerCase() ?? 'mp4';
+    const path = `${Date.now()}.${ext}`;
+    const contentType = ext === 'mov' ? 'video/quicktime' : 'video/mp4';
+
+    const { error } = await supabase.storage
+      .from('post-videos')
+      .upload(path, arraybuffer, { contentType });
+
+    if (error) {
+      Alert.alert('upload failed', friendlyError(error));
+      return null;
+    }
+    const { data } = supabase.storage.from('post-videos').getPublicUrl(path);
+    return data.publicUrl;
+  }
+
   async function handleSave() {
     if (saving) return; // guard against double-tap → double post
 
@@ -179,17 +240,44 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost, t
       if (!user) return;
 
       // keep an existing remote url, upload a new local file, or store nothing
+      // — a post has either an image or a video, never both.
       let image_url: string | null = null;
-      if (imageUri) {
-        if (imageUri.startsWith('http')) {
-          image_url = imageUri;
+      let video_url: string | null = null;
+      if (mediaUri) {
+        const isRemote = mediaUri.startsWith('http');
+        if (mediaType === 'video') {
+          video_url = isRemote ? mediaUri : await uploadVideo(mediaUri);
+          if (video_url === null) {
+            setSaving(false);
+            return;
+          }
         } else {
-          image_url = await uploadImage(imageUri);
+          image_url = isRemote ? mediaUri : await uploadImage(mediaUri);
           // upload failed or was rejected (too large) — stop, don't post a
-          // photo-less version of a post the user attached a photo to
+          // media-less version of a post the user attached media to
           if (image_url === null) {
             setSaving(false);
             return;
+          }
+
+          // only re-check a freshly uploaded photo, not one already approved
+          // on a previous save of this same post
+          if (!isRemote) {
+            const { data: modData, error: modError } = await supabase.functions.invoke('moderate-image', {
+              body: { imageUrl: image_url },
+            });
+            if (modError) {
+              Alert.alert('Could not check photo', friendlyError(modError));
+              setSaving(false);
+              return;
+            }
+            if (modData?.blocked) {
+              const path = image_url.split('/post-images/')[1];
+              if (path) await supabase.storage.from('post-images').remove([path]);
+              Alert.alert('Post not allowed', 'This photo violates our community guidelines (nudity or graphic content).');
+              setSaving(false);
+              return;
+            }
           }
         }
       }
@@ -206,6 +294,7 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost, t
         length_in: length ? Number(length) : null,
         released: activeLog === 'Catch' ? released : null,
         image_url: image_url,
+        video_url: video_url,
       };
 
       let error;
@@ -308,14 +397,20 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost, t
               )}
 
               <TouchableOpacity style={styles.photoButton} onPress={pickImage}>
-                <Text style={styles.photoButtonText}>{imageUri ? 'Change Photo' : '📷  Add Photo'}</Text>
+                <Text style={styles.photoButtonText}>
+                  {mediaUri ? `Change ${mediaType === 'video' ? 'Video' : 'Photo'}` : '📷  Add Photo or Video'}
+                </Text>
               </TouchableOpacity>
-              {imageUri && (
+              {mediaUri && (
                 <View style={styles.previewWrap}>
-                  <TouchableOpacity activeOpacity={0.9} onPress={() => setViewImageUri(imageUri)}>
-                    <Image source={{ uri: imageUri }} style={styles.photoPreview} />
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.trashButton} onPress={() => setImageUri(null)}>
+                  {mediaType === 'video' ? (
+                    <ComposerVideoPreview uri={mediaUri} />
+                  ) : (
+                    <TouchableOpacity activeOpacity={0.9} onPress={() => setViewImageUri(mediaUri)}>
+                      <Image source={{ uri: mediaUri }} style={styles.photoPreview} />
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity style={styles.trashButton} onPress={() => setMediaUri(null)}>
                     <Image source={require('../../assets/trash.png')} style={styles.trashIconImage} />
                   </TouchableOpacity>
                 </View>
@@ -355,6 +450,15 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost, t
       </Modal>
     </>
   );
+}
+
+// small preview player for a video attached in the composer — separate component
+// so useVideoPlayer only mounts (and only runs) while a video is actually attached.
+function ComposerVideoPreview({ uri }: { uri: string }) {
+  const player = useVideoPlayer(uri, (p) => {
+    p.loop = true;
+  });
+  return <VideoView player={player} style={styles.photoPreview} contentFit="cover" nativeControls />;
 }
 
 const styles = StyleSheet.create({
