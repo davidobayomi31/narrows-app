@@ -17,7 +17,6 @@
       "usesAppleSignIn": true,
       "infoPlist": {
         "NSFaceIDUsageDescription": "Narrows uses Face ID to sign you in quickly and securely.",
-        "NSLocationWhenInUseUsageDescription": "Narrows uses your location to show your position on the water, drop catch pins, and track trips.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "supportsTablet": true
@@ -60,7 +59,17 @@
           }
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Narrows uses your location in the background to track your trip's distance and time while the app is closed.",
+          "locationWhenInUsePermission": "Narrows uses your location to show your position on the water, drop catch pins, and track trips.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ]
     ]
   }
 }

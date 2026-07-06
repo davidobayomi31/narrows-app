@@ -1,6 +1,12 @@
-import { createContext, useContext, useRef, useState, useCallback } from 'react';
+import { createContext, useContext, useRef, useState, useCallback, useEffect } from 'react';
+import { AppState } from 'react-native';
 import * as Location from 'expo-location';
 import { distanceKm } from '../lib/tripTracking';
+import {
+  startBackgroundTripTracking,
+  stopBackgroundTripTracking,
+  takeBackgroundPoints,
+} from '../lib/backgroundTripTracking';
 
 type TripResult = { duration_hours: number; distance_km: number };
 
@@ -24,6 +30,36 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
   const distanceRef = useRef(0);
   const subscriptionRef = useRef<Location.LocationSubscription | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isTrackingRef = useRef(false);
+
+  // Foreground location updates pause once the app backgrounds, so a separate
+  // background task (lib/backgroundTripTracking.ts) takes over while backgrounded
+  // and its points get merged back in here when the app returns to the foreground.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', async (nextState) => {
+      if (!isTrackingRef.current) return;
+
+      if (nextState === 'background') {
+        await startBackgroundTripTracking();
+      } else if (nextState === 'active') {
+        await stopBackgroundTripTracking();
+        const points = takeBackgroundPoints();
+
+        let last = lastCoordRef.current;
+        for (const point of points) {
+          const coord = { latitude: point.latitude, longitude: point.longitude };
+          if (last) {
+            distanceRef.current += distanceKm(last, coord);
+          }
+          last = coord;
+        }
+        lastCoordRef.current = last;
+        setDistance(distanceRef.current);
+      }
+    });
+
+    return () => sub.remove();
+  }, []);
 
   const startTrip = useCallback(async () => {
     const { status } = await Location.requestForegroundPermissionsAsync();
@@ -51,11 +87,14 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
       setElapsedSeconds(Math.floor((Date.now() - startTimeRef.current) / 1000));
     }, 1000);
 
+    isTrackingRef.current = true;
     setIsTracking(true);
     return true;
   }, []);
 
   const endTrip = useCallback((): TripResult => {
+    isTrackingRef.current = false;
+    stopBackgroundTripTracking();
     subscriptionRef.current?.remove();
     subscriptionRef.current = null;
     if (tickRef.current) clearInterval(tickRef.current);
