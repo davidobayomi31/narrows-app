@@ -94,7 +94,7 @@ export default function PostDetailScreen() {
   // to send it. Every share carries the "Shared via Narrows" text tag.
   async function sharePost() {
     if (!post) return;
-    const TAG = 'Shared via Narrows 🚤 narrows.site';
+    const TAG = 'Shared via Narrows · narrows.site';
     try {
       if (!post.image_url && !post.video_url) {
         await Share.share({ message: `${post.caption ? post.caption + '\n\n' : ''}${TAG}` });

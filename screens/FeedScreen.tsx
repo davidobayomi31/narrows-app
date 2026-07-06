@@ -225,7 +225,7 @@ export default function FeedScreen() {
   // the OS share sheet, and (only when a real FB App ID is set) Instagram Story.
   // Every share carries the "Shared via Narrows" text tag.
   async function sharePost(post: any) {
-    const TAG = 'Shared via Narrows 🚤 narrows.site';
+    const TAG = 'Shared via Narrows · narrows.site';
     try {
       // caption-only post: nothing to download, just share the text
       if (!post.image_url && !post.video_url) {
