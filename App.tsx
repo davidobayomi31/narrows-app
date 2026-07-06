@@ -1,5 +1,7 @@
-import {NavigationContainer} from '@react-navigation/native';
+import {NavigationContainer, createNavigationContainerRef} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
+import { useEffect } from 'react';
+import * as Notifications from 'expo-notifications';
 
 import MainTabs from './screens/navigation/MainTabs';
 import LoginScreen from './screens/LoginScreen';
@@ -20,14 +22,42 @@ import { StatusBar } from 'expo-status-bar';
 import { Colors } from './constants/colors';
 import { TripProvider } from './contexts/TripContext';
 import { UnitsProvider } from './contexts/UnitsContext';
+import { registerForPushNotifications } from './lib/pushNotifications';
+import { supabase } from './lib/supabase';
 
 const Stack = createNativeStackNavigator();
+// lets us navigate from outside React components (e.g. a push notification tap)
+export const navigationRef = createNavigationContainerRef<any>();
 
 export default function App(){
+  useEffect(() => {
+    // register this device for push whenever a user is signed in
+    registerForPushNotifications();
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) registerForPushNotifications();
+    });
+
+    // tapping a push notification jumps to the relevant post (same as in-app)
+    const tapSub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data as any;
+      if (data?.postId && navigationRef.isReady()) {
+        navigationRef.navigate('Main', {
+          screen: 'Feed',
+          params: { focusPostId: data.postId, focusType: data.type, focusNonce: Date.now() },
+        });
+      }
+    });
+
+    return () => {
+      sub.subscription.unsubscribe();
+      tapSub.remove();
+    };
+  }, []);
+
   return (
     <UnitsProvider>
     <TripProvider>
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <StatusBar style="light" />
       <Stack.Navigator
         initialRouteName='Splash'

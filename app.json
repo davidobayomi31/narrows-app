@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "narrows-app",
+    "name": "Narrows",
     "slug": "narrows-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -59,7 +59,8 @@
             ]
           }
         }
-      ]
+      ],
+      "expo-notifications"
     ]
   }
 }

@@ -16,6 +16,7 @@ import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
 import { friendlyError } from '../lib/errors';
 import { useUnits } from '../contexts/UnitsContext';
+import { pickAndSaveAvatar } from '../lib/uploadAvatar';
 import PostComposer from './components/PostComposer';
 
 const BADGE_COLORS: Record<string, string> = {
@@ -41,6 +42,15 @@ export default function ProfileScreen() {
   const [myPosts, setMyPosts] = useState<any[]>([]);
   const [editingPost, setEditingPost] = useState<any>(null);
   const [activeFilter, setActiveFilter] = useState('All');
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  async function changeAvatar() {
+    if (uploadingAvatar) return;
+    setUploadingAvatar(true);
+    const url = await pickAndSaveAvatar();
+    setUploadingAvatar(false);
+    if (url) setProfile((p: any) => ({ ...p, avatar_url: url }));
+  }
 
   useFocusEffect(
     useCallback(() => {
@@ -108,13 +118,18 @@ export default function ProfileScreen() {
 
         {/* header */}
         <View style={styles.header}>
-          {profile?.avatar_url ? (
-            <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
-          ) : (
-            <View style={[styles.avatar, styles.avatarPlaceholder]}>
-              <Text style={styles.avatarInitial}>{profile?.first_name?.[0]?.toUpperCase() || 'B'}</Text>
+          <TouchableOpacity onPress={changeAvatar} activeOpacity={0.8} disabled={uploadingAvatar}>
+            {profile?.avatar_url ? (
+              <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
+            ) : (
+              <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                <Text style={styles.avatarInitial}>{profile?.first_name?.[0]?.toUpperCase() || 'B'}</Text>
+              </View>
+            )}
+            <View style={styles.cameraBadge}>
+              <Ionicons name={uploadingAvatar ? 'hourglass-outline' : 'camera'} size={15} color={Colors.black} />
             </View>
-          )}
+          </TouchableOpacity>
           <View style={styles.nameRow}>
             <Text style={styles.name}>{name}</Text>
             {profile?.verified && (
@@ -195,6 +210,19 @@ const styles = StyleSheet.create({
   header: { alignItems: 'center', marginBottom: 20 },
   avatar: { width: 88, height: 88, borderRadius: 44 },
   avatarPlaceholder: { backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
+  cameraBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: Colors.background,
+  },
   avatarInitial: { color: Colors.cream, fontSize: 34, fontWeight: 'bold' },
   nameRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
   name: { color: Colors.cream, fontSize: 22, fontWeight: 'bold' },
