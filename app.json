@@ -19,7 +19,7 @@
         "NSFaceIDUsageDescription": "Narrows uses Face ID to sign you in quickly and securely.",
         "ITSAppUsesNonExemptEncryption": false
       },
-      "supportsTablet": true
+      "supportsTablet": false
     },
     "android": {
       "package": "site.narrows.app",
