@@ -3,6 +3,22 @@ import * as ImagePicker from 'expo-image-picker';
 import { supabase } from './supabase';
 import { friendlyError } from './errors';
 
+// Clears the user's profile avatar (reverts to the initials default).
+// Returns true on success.
+export async function removeAvatar(): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+  const { error } = await supabase
+    .from('profiles')
+    .update({ avatar_url: null })
+    .eq('id', user.id);
+  if (error) {
+    Alert.alert('Could not remove photo', friendlyError(error));
+    return false;
+  }
+  return true;
+}
+
 // Lets the user pick a square photo, uploads it to storage, saves it as their
 // profile avatar, and returns the new public URL (or null if cancelled/failed).
 export async function pickAndSaveAvatar(): Promise<string | null> {

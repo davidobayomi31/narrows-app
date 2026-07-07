@@ -47,6 +47,20 @@ export default function EditProfileScreen() {
     load();
   }, []);
 
+  // tapping the avatar: with a photo set, offer Change or Remove; otherwise
+  // go straight to the picker.
+  function handleAvatarPress() {
+    if (!avatarUrl) {
+      pickAndUploadAvatar();
+      return;
+    }
+    Alert.alert('Profile photo', undefined, [
+      { text: 'Change Photo', onPress: pickAndUploadAvatar },
+      { text: 'Remove Photo', style: 'destructive', onPress: () => setAvatarUrl(null) },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }
+
   async function pickAndUploadAvatar() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
@@ -118,7 +132,7 @@ export default function EditProfileScreen() {
       automaticallyAdjustKeyboardInsets
     >
       {/* avatar */}
-      <TouchableOpacity style={styles.avatarWrap} onPress={pickAndUploadAvatar}>
+      <TouchableOpacity style={styles.avatarWrap} onPress={handleAvatarPress}>
         {avatarUrl ? (
           <Image source={{ uri: avatarUrl }} style={styles.avatar} />
         ) : (
@@ -126,7 +140,9 @@ export default function EditProfileScreen() {
             <Text style={styles.avatarInitial}>{firstName?.[0]?.toUpperCase() || 'B'}</Text>
           </View>
         )}
-        <Text style={styles.changePhoto}>{uploading ? 'Uploading…' : 'Change photo'}</Text>
+        <Text style={styles.changePhoto}>
+          {uploading ? 'Uploading…' : avatarUrl ? 'Change or remove photo' : 'Add photo'}
+        </Text>
       </TouchableOpacity>
 
       <Text style={styles.label}>First name</Text>

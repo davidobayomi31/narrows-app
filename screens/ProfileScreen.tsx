@@ -17,7 +17,7 @@ import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
 import { friendlyError } from '../lib/errors';
 import { useUnits } from '../contexts/UnitsContext';
-import { pickAndSaveAvatar } from '../lib/uploadAvatar';
+import { pickAndSaveAvatar, removeAvatar } from '../lib/uploadAvatar';
 import PostComposer from './components/PostComposer';
 
 const BADGE_COLORS: Record<string, string> = {
@@ -45,12 +45,33 @@ export default function ProfileScreen() {
   const [activeFilter, setActiveFilter] = useState('All');
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
-  async function changeAvatar() {
+  async function pickAvatar() {
     if (uploadingAvatar) return;
     setUploadingAvatar(true);
     const url = await pickAndSaveAvatar();
     setUploadingAvatar(false);
     if (url) setProfile((p: any) => ({ ...p, avatar_url: url }));
+  }
+
+  // tap the avatar: with a photo, offer Change or Remove; otherwise pick directly
+  function changeAvatar() {
+    if (uploadingAvatar) return;
+    if (!profile?.avatar_url) {
+      pickAvatar();
+      return;
+    }
+    Alert.alert('Profile photo', undefined, [
+      { text: 'Change Photo', onPress: pickAvatar },
+      {
+        text: 'Remove Photo',
+        style: 'destructive',
+        onPress: async () => {
+          const ok = await removeAvatar();
+          if (ok) setProfile((p: any) => ({ ...p, avatar_url: null }));
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   }
 
   useFocusEffect(
