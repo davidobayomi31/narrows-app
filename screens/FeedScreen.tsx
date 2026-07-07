@@ -183,7 +183,6 @@ export default function FeedScreen() {
       .select('*')
       .order('created_at', { ascending: false });
     if (error) {
-      console.log(error.message);
       return;
     }
 
