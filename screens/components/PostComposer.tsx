@@ -432,21 +432,16 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost, t
               </TouchableOpacity>
               </ScrollView>
           </KeyboardAvoidingView>
-        </View>
-      </Modal>
 
-      {/* Full-screen image viewer */}
-      <Modal
-        visible={!!viewImageUri}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setViewImageUri(null)}
-      >
-        <Pressable style={styles.imageViewerOverlay} onPress={() => setViewImageUri(null)}>
+          {/* Full-screen image viewer — an overlay INSIDE this Modal (a second
+              stacked Modal doesn't reliably present/receive touches on iOS,
+              which is why tapping an image preview did nothing before). */}
           {viewImageUri && (
-            <Image source={{ uri: viewImageUri }} style={styles.fullImage} resizeMode="contain" />
+            <Pressable style={styles.imageViewerOverlay} onPress={() => setViewImageUri(null)}>
+              <Image source={{ uri: viewImageUri }} style={styles.fullImage} resizeMode="contain" />
+            </Pressable>
           )}
-        </Pressable>
+        </View>
       </Modal>
     </>
   );
@@ -612,10 +607,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   imageViewerOverlay: {
-    flex: 1,
+    // absolute-fill so it can live INSIDE the composer Modal (a second stacked
+    // Modal doesn't reliably present on iOS) and cover the whole screen
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.92)',
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 20,
   },
   fullImage: {
     width: '100%',

@@ -19,6 +19,7 @@ import MarinaProfileScreen from './screens/MarinaProfileScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
 import PostDetailScreen from './screens/PostDetailScreen';
 import { StatusBar } from 'expo-status-bar';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from './constants/colors';
 import { TripProvider } from './contexts/TripContext';
 import { UnitsProvider } from './contexts/UnitsContext';
@@ -45,8 +46,16 @@ export default function App(){
   useEffect(() => {
     // register this device for push whenever a user is signed in
     registerForPushNotifications();
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) registerForPushNotifications();
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session) {
+        registerForPushNotifications();
+        // remember we've been signed in, so an OFFLINE reopen (where token
+        // refresh can't reach the server) still lets Splash into the app.
+        AsyncStorage.setItem('narrows.signedIn', '1').catch(() => {});
+      }
+      if (event === 'SIGNED_OUT') {
+        AsyncStorage.removeItem('narrows.signedIn').catch(() => {});
+      }
     });
 
     // tapping a push notification jumps to the relevant post (same as in-app)
@@ -73,7 +82,10 @@ export default function App(){
       <StatusBar style="light" />
       <Stack.Navigator
         initialRouteName='Splash'
-        screenOptions={{ headerShown: false }}
+        // freezeOnBlur:false — with the New Architecture, react-native-screens
+        // can leave a screen's touch handling detached after it's un-frozen on
+        // return (e.g. Profile → Settings → back → Settings froze the UI).
+        screenOptions={{ headerShown: false, freezeOnBlur: false }}
       >
         <Stack.Screen name='Splash' component={SplashScreen} />
         <Stack.Screen name='Login' component={LoginScreen} />

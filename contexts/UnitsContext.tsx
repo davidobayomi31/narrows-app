@@ -13,6 +13,10 @@ const KM_TO_MI = 0.621371;
 const MS_TO_KMH = 3.6;
 const MS_TO_MPH = 2.236936;
 const MS_TO_KN = 1.943844;
+// GPS speed is jittery when nearly stationary (just holding/moving the phone
+// registers a few km/h). Suppress anything under this floor so the readout
+// stays at 0 until the boat is actually moving. 6 km/h ≈ 1.667 m/s.
+const SPEED_FLOOR_MPS = 6 / MS_TO_KMH;
 const STORAGE_KEY = 'narrows.units';
 
 type UnitsContextValue = {
@@ -106,8 +110,10 @@ export function UnitsProvider({ children }: { children: ReactNode }) {
   const speedLabel = speedUnit === 'mph' ? 'mph' : speedUnit === 'kn' ? 'kn' : 'km/h';
 
   function formatSpeed(metersPerSecond: number | null | undefined) {
-    // GPS reports null (or a negative sentinel) when speed is unavailable/stationary
-    const mps = metersPerSecond != null && metersPerSecond > 0 ? metersPerSecond : 0;
+    // GPS reports null (or a negative sentinel) when speed is unavailable/stationary.
+    // Below the floor, hold at 0 so noise near standstill doesn't flicker.
+    const raw = metersPerSecond != null && metersPerSecond > 0 ? metersPerSecond : 0;
+    const mps = raw < SPEED_FLOOR_MPS ? 0 : raw;
     const factor = speedUnit === 'mph' ? MS_TO_MPH : speedUnit === 'kn' ? MS_TO_KN : MS_TO_KMH;
     return `${round(mps * factor, 0)} ${speedLabel}`;
   }
