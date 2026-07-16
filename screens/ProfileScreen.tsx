@@ -15,6 +15,7 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
+import { cacheGet, cacheSet, withTimeout } from '../lib/cache';
 import { friendlyError } from '../lib/errors';
 import { useUnits } from '../contexts/UnitsContext';
 import { pickAndSaveAvatar, removeAvatar } from '../lib/uploadAvatar';
@@ -92,21 +93,44 @@ export default function ProfileScreen() {
   ];
 
   async function loadProfile() {
-    const { data: { user } } = await supabase.auth.getUser();
+    // getSession() is local (no network) — getUser() would hang offline and
+    // leave the profile blank ("Boater"), losing the user's saved info.
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) return;
-    const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-    if (data) setProfile(data);
+    try {
+      const { data, error } = await withTimeout(
+        supabase.from('profiles').select('*').eq('id', user.id).single()
+      );
+      if (error || !data) throw error ?? new Error('no profile');
+      setProfile(data);
+      await cacheSet('profile', data);
+    } catch {
+      // offline — show the last profile we saved so it isn't blank
+      const cached = await cacheGet<any>('profile');
+      if (cached) setProfile(cached);
+    }
   }
 
   async function loadMyPosts() {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) return;
-    const { data } = await supabase
-      .from('posts')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
-    setMyPosts(data || []);
+    try {
+      const { data, error } = await withTimeout(
+        supabase
+          .from('posts')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+      );
+      if (error) throw error;
+      setMyPosts(data || []);
+      await cacheSet('myPosts', data || []);
+    } catch {
+      const cached = await cacheGet<any[]>('myPosts');
+      if (cached) setMyPosts(cached);
+    }
   }
 
   function postMenu(post: any) {

@@ -15,6 +15,7 @@ import * as Location from 'expo-location';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
+import { cacheGet, cacheSet, withTimeout } from '../lib/cache';
 import { friendlyError } from '../lib/errors';
 import { Ionicons } from '@expo/vector-icons';
 import { useTrip } from '../contexts/TripContext';
@@ -83,13 +84,23 @@ export default function MapScreen() {
     requestLocation();
     loadPins();
     loadMarinas();
-    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
+    // getSession() is local (no network) so we still know the user offline
+    supabase.auth.getSession().then(({ data }) => setUserId(data.session?.user?.id ?? null));
   }, []);
 
   // load marina locations (static pins, separate from community catch pins)
   async function loadMarinas() {
-    const { data } = await supabase.from('marinas').select('id, name, latitude, longitude');
-    setMarinas(data || []);
+    try {
+      const { data, error } = await withTimeout(
+        supabase.from('marinas').select('id, name, latitude, longitude')
+      );
+      if (error) throw error;
+      setMarinas(data || []);
+      await cacheSet('mapMarinas', data || []);
+    } catch {
+      const cached = await cacheGet<MarinaPin[]>('mapMarinas');
+      if (cached) setMarinas(cached);
+    }
   }
 
   // ask for GPS permission so the blue user-location dot can show
@@ -122,20 +133,29 @@ export default function MapScreen() {
 
   // load everyone's catch pins (community layer)
   async function loadPins() {
-    const { data: pinsData } = await supabase
-      .from('catch_pins')
-      .select('id, latitude, longitude, species, notes, user_id, created_at')
-      .order('created_at', { ascending: false });
+    try {
+      const { data: pinsData, error } = await withTimeout(
+        supabase
+          .from('catch_pins')
+          .select('id, latitude, longitude, species, notes, user_id, created_at')
+          .order('created_at', { ascending: false })
+      );
+      if (error) throw error;
 
-    const { data: profilesData } = await supabase
-      .from('profiles')
-      .select('id, first_name, last_name');
+      const { data: profilesData } = await withTimeout(
+        supabase.from('profiles').select('id, first_name, last_name')
+      );
 
-    const merged = (pinsData || []).map((p) => ({
-      ...p,
-      author: profilesData?.find((pr) => pr.id === p.user_id),
-    }));
-    setPins(merged);
+      const merged = (pinsData || []).map((p) => ({
+        ...p,
+        author: profilesData?.find((pr) => pr.id === p.user_id),
+      }));
+      setPins(merged);
+      await cacheSet('mapPins', merged);
+    } catch {
+      const cached = await cacheGet<CatchPin[]>('mapPins');
+      if (cached) setPins(cached);
+    }
   }
 
   async function handleStartTrip() {
@@ -163,7 +183,8 @@ export default function MapScreen() {
     if (!newCoord) return;
     setSaving(true);
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) {
       setSaving(false);
       return;

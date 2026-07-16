@@ -17,14 +17,22 @@ export default function SplashScreen(){
     async function checkLoginStatus() {
         const minDisplay = new Promise(resolve => setTimeout(resolve, 2000));
 
-        //check if use is still logged in - placeholder for now
-        const {data} = await supabase.auth.getSession();
-        if (data.session) {
-            // prefetch Home's data in parallel with the minimum logo display,
-            // so Home never needs to show its own loading screen right after this
-            await Promise.all([loadHomeData(), minDisplay]);
-            navigation.navigate('Main');
-        } else {
+        try {
+            // getSession() reads the saved session from local storage (no network),
+            // so this still works with no wifi/service.
+            const {data} = await supabase.auth.getSession();
+            if (data.session) {
+                // prefetch Home's data in parallel with the minimum logo display.
+                // loadHomeData() never rejects (it falls back to cache offline),
+                // so the splash always moves on instead of hanging on the logo.
+                await Promise.all([loadHomeData(), minDisplay]);
+                navigation.navigate('Main');
+            } else {
+                await minDisplay;
+                navigation.navigate('Login');
+            }
+        } catch {
+            // last-resort guard: never strand the user on the splash screen
             await minDisplay;
             navigation.navigate('Login');
         }

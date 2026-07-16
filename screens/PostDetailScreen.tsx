@@ -18,8 +18,6 @@ import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
 import { useUnits } from '../contexts/UnitsContext';
 import CommentsModal from './components/CommentsModal';
-import { shareToInstagramStory, shareToSnapchat } from '../lib/shareToSocial';
-import { FACEBOOK_APP_ID } from '../constants/social';
 
 const BADGE_COLORS: Record<string, string> = { TRIP: '#1B4FD8', CATCH: '#166534', CHECK: '#92400E' };
 
@@ -105,31 +103,9 @@ export default function PostDetailScreen() {
       const ext = post.video_url ? 'mp4' : 'jpg';
       const dest = new File(Paths.cache, `narrows-share-${Date.now()}.${ext}`);
       const file = await File.downloadFileAsync(remoteUrl, dest);
-      const localUri = file.uri;
 
-      const options: any[] = [];
-      if (FACEBOOK_APP_ID !== 'YOUR_FACEBOOK_APP_ID') {
-        options.push({
-          text: 'Instagram Story',
-          onPress: () => shareToInstagramStory(localUri).catch(() =>
-            Alert.alert('Could not share', 'Instagram may not be installed.')
-          ),
-        });
-      }
-      options.push(
-        {
-          text: 'Snapchat',
-          onPress: () => shareToSnapchat(localUri).catch(() =>
-            Alert.alert('Could not share', 'Snapchat may not be installed.')
-          ),
-        },
-        {
-          text: 'More options…',
-          onPress: () => Share.share({ message: TAG, url: localUri }),
-        },
-        { text: 'Cancel', style: 'cancel' }
-      );
-      Alert.alert('Share to…', undefined, options);
+      // iOS: `url` attaches the media to the OS share sheet; `message` adds the tag.
+      await Share.share({ url: file.uri, message: TAG });
     } catch {
       Alert.alert('Could not share', 'Something went wrong sharing this post.');
     }

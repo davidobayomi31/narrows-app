@@ -46,7 +46,8 @@ export default function CommentsModal({ visible, postId, postOwnerId, onClose, o
   const insets = useSafeAreaInsets(); // bottom inset so the input clears the home bar
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id ?? null));
+    // local session (no network) so identity resolves even offline
+    supabase.auth.getSession().then(({ data }) => setCurrentUserId(data.session?.user?.id ?? null));
   }, []);
 
   useEffect(() => {

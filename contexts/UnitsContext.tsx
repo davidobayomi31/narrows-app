@@ -109,7 +109,7 @@ export function UnitsProvider({ children }: { children: ReactNode }) {
     // GPS reports null (or a negative sentinel) when speed is unavailable/stationary
     const mps = metersPerSecond != null && metersPerSecond > 0 ? metersPerSecond : 0;
     const factor = speedUnit === 'mph' ? MS_TO_MPH : speedUnit === 'kn' ? MS_TO_KN : MS_TO_KMH;
-    return `${round(mps * factor)} ${speedLabel}`;
+    return `${round(mps * factor, 0)} ${speedLabel}`;
   }
 
   const value: UnitsContextValue = {

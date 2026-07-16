@@ -24,8 +24,7 @@ import { useUnits } from '../contexts/UnitsContext';
 import PostComposer from './components/PostComposer';
 import CommentsModal from './components/CommentsModal';
 import { REPORT_REASONS, reportContent, blockUser, getHiddenUserIds } from '../lib/safety';
-import { shareToInstagramStory, shareToSnapchat } from '../lib/shareToSocial';
-import { FACEBOOK_APP_ID } from '../constants/social';
+import { cacheGet, cacheSet, withTimeout } from '../lib/cache';
 
 const FILTER = ['All', 'Trips', 'Catches', 'Check-ins'];
 const FILTER_TYPE: Record<string, string> = { Trips: 'TRIP', Catches: 'CATCH', 'Check-ins': 'CHECK' };
@@ -99,7 +98,8 @@ export default function FeedScreen() {
   );
 
   async function loadUnreadCount() {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) return;
     const { count } = await supabase
       .from('notifications')
@@ -178,39 +178,51 @@ export default function FeedScreen() {
   }
 
   async function loadPosts() {
-    const { data: postsData, error } = await supabase
-      .from('posts')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (error) {
-      return;
-    }
-
-    const { data: profilesData } = await supabase
-      .from('profiles')
-      .select('id, first_name, last_name, region');
-    const { data: likesData } = await supabase.from('likes').select('post_id, user_id');
-    const { data: commentsData } = await supabase.from('comments').select('post_id');
-    const { data: { user } } = await supabase.auth.getUser();
+    // getSession() reads local storage (no network), so we still know who the
+    // user is when offline — getUser() would hang/fail with no connection.
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
     setCurrentUserId(user?.id ?? null);
 
-    // hide posts from users this user has blocked (or who blocked them)
-    const hidden = await getHiddenUserIds();
+    try {
+      const { data: postsData, error } = await withTimeout(
+        supabase.from('posts').select('*').order('created_at', { ascending: false })
+      );
+      if (error) throw error;
 
-    const merged = (postsData || [])
-      .filter((post) => !hidden.has(post.user_id))
-      .map((post) => {
-      const postLikes = (likesData || []).filter((l) => l.post_id === post.id);
-      return {
-        ...post,
-        author: profilesData?.find((p) => p.id === post.user_id),
-        likeCount: postLikes.length,
-        likedByMe: postLikes.some((l) => l.user_id === user?.id),
-        commentCount: (commentsData || []).filter((c) => c.post_id === post.id).length,
-      };
-    });
-    setPosts(merged);
-    postsRef.current = merged;
+      const { data: profilesData } = await withTimeout(
+        supabase.from('profiles').select('id, first_name, last_name, region')
+      );
+      const { data: likesData } = await withTimeout(supabase.from('likes').select('post_id, user_id'));
+      const { data: commentsData } = await withTimeout(supabase.from('comments').select('post_id'));
+
+      // hide posts from users this user has blocked (or who blocked them)
+      const hidden = await getHiddenUserIds();
+
+      const merged = (postsData || [])
+        .filter((post) => !hidden.has(post.user_id))
+        .map((post) => {
+        const postLikes = (likesData || []).filter((l) => l.post_id === post.id);
+        return {
+          ...post,
+          author: profilesData?.find((p) => p.id === post.user_id),
+          likeCount: postLikes.length,
+          likedByMe: postLikes.some((l) => l.user_id === user?.id),
+          commentCount: (commentsData || []).filter((c) => c.post_id === post.id).length,
+        };
+      });
+      setPosts(merged);
+      postsRef.current = merged;
+      // persist so opening the feed offline shows this instead of an empty page
+      await cacheSet('feed', merged);
+    } catch {
+      // offline / failed — show the last posts we successfully loaded
+      const cached = await cacheGet<any[]>('feed');
+      if (cached && cached.length) {
+        setPosts(cached);
+        postsRef.current = cached;
+      }
+    }
   }
 
   async function onRefresh() {
@@ -220,9 +232,10 @@ export default function FeedScreen() {
   }
 
   // Downloads the post's media to a uniquely-named cache file (unique name avoids
-  // "file already exists" on repeat shares), then offers where to send it — Snapchat,
-  // the OS share sheet, and (only when a real FB App ID is set) Instagram Story.
-  // Every share carries the "Shared via Narrows" text tag.
+  // "file already exists" on repeat shares), then hands it to the OS share sheet.
+  // Using React Native's built-in Share (not react-native-share) means the sheet
+  // itself offers Instagram, Snapchat, Messages, etc. — no fragile per-app native
+  // targets to freeze on. Every share carries the "Shared via Narrows" text tag.
   async function sharePost(post: any) {
     const TAG = 'Shared via Narrows · narrows.site';
     try {
@@ -236,32 +249,9 @@ export default function FeedScreen() {
       const ext = post.video_url ? 'mp4' : 'jpg';
       const dest = new File(Paths.cache, `narrows-share-${Date.now()}.${ext}`);
       const file = await File.downloadFileAsync(remoteUrl, dest);
-      const localUri = file.uri;
 
-      const options: any[] = [];
-      // Instagram Story only appears once a real Facebook App ID is wired.
-      if (FACEBOOK_APP_ID !== 'YOUR_FACEBOOK_APP_ID') {
-        options.push({
-          text: 'Instagram Story',
-          onPress: () => shareToInstagramStory(localUri).catch(() =>
-            Alert.alert('Could not share', 'Instagram may not be installed.')
-          ),
-        });
-      }
-      options.push(
-        {
-          text: 'Snapchat',
-          onPress: () => shareToSnapchat(localUri).catch(() =>
-            Alert.alert('Could not share', 'Snapchat may not be installed.')
-          ),
-        },
-        {
-          text: 'More options…',
-          onPress: () => Share.share({ message: TAG, url: localUri }),
-        },
-        { text: 'Cancel', style: 'cancel' }
-      );
-      Alert.alert('Share to…', undefined, options);
+      // iOS: `url` attaches the media to the sheet; `message` adds the tag caption.
+      await Share.share({ url: file.uri, message: TAG });
     } catch {
       Alert.alert('Could not share', 'Something went wrong sharing this post.');
     }
@@ -318,7 +308,8 @@ export default function FeedScreen() {
   }
 
   async function toggleLike(post: any) {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) return;
     if (post.likedByMe) {
       await supabase.from('likes').delete().eq('post_id', post.id).eq('user_id', user.id);

@@ -1,5 +1,8 @@
 import { supabase } from './supabase';
 import { getWeather, Weather } from './weather';
+import { cacheGet, cacheSet, withTimeout } from './cache';
+
+const HOME_CACHE_KEY = 'home';
 
 export type Marina = {
   id: string;
@@ -21,27 +24,40 @@ let cachedWeather: Weather | null = null;
 let hasCached = false;
 
 export async function loadHomeData(): Promise<{ marina: Marina | null; weather: Weather | null }> {
-  const { data, error } = await supabase
-    .from('marinas')
-    .select('id, name, lake, address, phone, amenities, latitude, longitude, image_url, water_alert')
-    .eq('featured', true)
-    .single();
+  try {
+    const { data, error } = await withTimeout(
+      supabase
+        .from('marinas')
+        .select('id, name, lake, address, phone, amenities, latitude, longitude, image_url, water_alert')
+        .eq('featured', true)
+        .single()
+    );
 
-  let marina: Marina | null = null;
-  let weather: Weather | null = null;
+    if (error || !data) throw error ?? new Error('no featured marina');
 
-  if (!error && data) {
-    marina = data;
+    const marina: Marina = data;
+    let weather: Weather | null = null;
     if (data.latitude != null && data.longitude != null) {
-      weather = await getWeather(data.latitude, data.longitude);
+      // weather is best-effort — a failure here shouldn't lose the marina
+      weather = await withTimeout(getWeather(data.latitude, data.longitude)).catch(() => null);
     }
+
+    cachedMarina = marina;
+    cachedWeather = weather;
+    hasCached = true;
+
+    // persist so a later OFFLINE cold start can still show this
+    await cacheSet(HOME_CACHE_KEY, { marina, weather });
+
+    return { marina, weather };
+  } catch {
+    // offline or the request failed — fall back to the last data we saved
+    const saved = await cacheGet<{ marina: Marina | null; weather: Weather | null }>(HOME_CACHE_KEY);
+    cachedMarina = saved?.marina ?? null;
+    cachedWeather = saved?.weather ?? null;
+    hasCached = true;
+    return { marina: cachedMarina, weather: cachedWeather };
   }
-
-  cachedMarina = marina;
-  cachedWeather = weather;
-  hasCached = true;
-
-  return { marina, weather };
 }
 
 export function getCachedHomeData() {
