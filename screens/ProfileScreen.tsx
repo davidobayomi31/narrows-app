@@ -8,6 +8,7 @@ import {
   Image,
   Alert,
   Dimensions,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -45,6 +46,17 @@ export default function ProfileScreen() {
   const [editingPost, setEditingPost] = useState<any>(null);
   const [activeFilter, setActiveFilter] = useState('All');
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // pull-to-refresh: reload profile + posts together
+  async function onRefresh() {
+    setRefreshing(true);
+    try {
+      await Promise.all([loadProfile(), loadMyPosts()]);
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   async function pickAvatar() {
     if (uploadingAvatar) return;
@@ -154,7 +166,11 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.gold} />}
+      >
         {/* top bar */}
         <View style={styles.topBar}>
           <TouchableOpacity onPress={() => navigation.navigate('Settings')} hitSlop={10}>

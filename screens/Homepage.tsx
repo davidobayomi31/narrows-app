@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ImageBackground, Linking, Alert, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ImageBackground, Linking, Alert, Image, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -63,6 +63,7 @@ export default function Homepage(){
   const [marina, setMarina] = useState<Marina | null>(null);
   const [weather, setWeather] = useState<Weather | null>(null);
   const [ready, setReady] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
 
@@ -101,6 +102,18 @@ export default function Homepage(){
     }, [marina])
   );
 
+  // pull-to-refresh: force a fresh fetch of marina + weather
+  async function onRefresh() {
+    setRefreshing(true);
+    try {
+      const { marina, weather } = await loadHomeData();
+      setMarina(marina);
+      setWeather(weather);
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   // open the user's chosen maps app, routed to the featured marina
   function openDirections() {
     if (marina?.latitude == null || marina?.longitude == null) return;
@@ -133,6 +146,7 @@ export default function Homepage(){
       <ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 46 }]}
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.gold} />}
       >
         {/* Water alert — only shows when a marina has an active alert */}
         {marina?.water_alert ? (
