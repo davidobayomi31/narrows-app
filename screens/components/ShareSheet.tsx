@@ -29,8 +29,9 @@ type Props = {
   onClose: () => void;
 };
 
-// TODO: swap for a real per-post web link once narrows.site has post pages.
-const POST_LINK = 'https://narrows.site';
+// per-post Universal Link: opens the app to this exact post if installed,
+// otherwise shows the narrows.site teaser page.
+const postLinkFor = (post: any) => `https://narrows.site/post/${post?.id ?? ''}`;
 const TAG = 'Shared via Narrows · narrows.site';
 
 export default function ShareSheet({ visible, post, onClose }: Props) {
@@ -58,12 +59,13 @@ export default function ShareSheet({ visible, post, onClose }: Props) {
   }
 
   const caption: string = post?.caption ?? '';
-  const shareText = `${caption ? caption + '\n\n' : ''}${TAG}\n${POST_LINK}`;
+  const postLink = postLinkFor(post);
+  const shareText = `${caption ? caption + '\n\n' : ''}${TAG}\n${postLink}`;
 
   async function copyLink() {
     setBusy('copy');
     try {
-      await Clipboard.setStringAsync(POST_LINK);
+      await Clipboard.setStringAsync(postLink);
       flash('Link copied');
     } finally {
       setBusy(null);

@@ -15,6 +15,7 @@
     "ios": {
       "bundleIdentifier": "site.narrows.app",
       "usesAppleSignIn": true,
+      "associatedDomains": ["applinks:narrows.site"],
       "infoPlist": {
         "NSFaceIDUsageDescription": "Narrows uses Face ID to sign you in quickly and securely.",
         "ITSAppUsesNonExemptEncryption": false,

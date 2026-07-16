@@ -5,19 +5,17 @@ import {
   ScrollView,
   Image,
   TouchableOpacity,
-  Share,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { File, Paths } from 'expo-file-system';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
 import { useUnits } from '../contexts/UnitsContext';
 import CommentsModal from './components/CommentsModal';
+import ShareSheet from './components/ShareSheet';
 
 const BADGE_COLORS: Record<string, string> = { TRIP: '#1B4FD8', CATCH: '#166534', CHECK: '#92400E' };
 
@@ -44,6 +42,7 @@ export default function PostDetailScreen() {
 
   const [post, setPost] = useState<any>(null);
   const [commentsOpen, setCommentsOpen] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -88,27 +87,9 @@ export default function PostDetailScreen() {
     loadPost();
   }
 
-  // Downloads the post's media to a uniquely-named cache file, then offers where
-  // to send it. Every share carries the "Shared via Narrows" text tag.
-  async function sharePost() {
-    if (!post) return;
-    const TAG = 'Shared via Narrows · narrows.site';
-    try {
-      if (!post.image_url && !post.video_url) {
-        await Share.share({ message: `${post.caption ? post.caption + '\n\n' : ''}${TAG}` });
-        return;
-      }
-
-      const remoteUrl = post.video_url ?? post.image_url;
-      const ext = post.video_url ? 'mp4' : 'jpg';
-      const dest = new File(Paths.cache, `narrows-share-${Date.now()}.${ext}`);
-      const file = await File.downloadFileAsync(remoteUrl, dest);
-
-      // iOS: `url` attaches the media to the OS share sheet; `message` adds the tag.
-      await Share.share({ url: file.uri, message: TAG });
-    } catch {
-      Alert.alert('Could not share', 'Something went wrong sharing this post.');
-    }
+  // opens the custom Instagram-style share sheet for this post
+  function sharePost() {
+    if (post) setSharing(true);
   }
 
   if (!post) {
@@ -198,6 +179,7 @@ export default function PostDetailScreen() {
         onClose={() => setCommentsOpen(false)}
         onCommentAdded={loadPost}
       />
+      <ShareSheet visible={sharing} post={post} onClose={() => setSharing(false)} />
     </SafeAreaView>
   );
 }

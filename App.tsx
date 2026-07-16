@@ -29,6 +29,18 @@ const Stack = createNativeStackNavigator();
 // lets us navigate from outside React components (e.g. a push notification tap)
 export const navigationRef = createNavigationContainerRef<any>();
 
+// Universal Links: tapping https://narrows.site/post/<id> (or narrows://post/<id>)
+// opens the app straight to that post. Falls back to the narrows.site teaser page
+// when the app isn't installed.
+const linking = {
+  prefixes: ['https://narrows.site', 'https://www.narrows.site', 'narrows://'],
+  config: {
+    screens: {
+      PostDetail: 'post/:postId',
+    },
+  },
+};
+
 export default function App(){
   useEffect(() => {
     // register this device for push whenever a user is signed in
@@ -57,7 +69,7 @@ export default function App(){
   return (
     <UnitsProvider>
     <TripProvider>
-    <NavigationContainer ref={navigationRef}>
+    <NavigationContainer ref={navigationRef} linking={linking}>
       <StatusBar style="light" />
       <Stack.Navigator
         initialRouteName='Splash'

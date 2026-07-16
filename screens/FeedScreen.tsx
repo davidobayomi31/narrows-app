@@ -8,7 +8,6 @@ import {
   Pressable,
   RefreshControl,
   Animated,
-  Share,
   Alert,
   InteractionManager,
 } from 'react-native';
@@ -16,13 +15,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { File, Paths } from 'expo-file-system';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
 import { useUnits } from '../contexts/UnitsContext';
 import PostComposer from './components/PostComposer';
 import CommentsModal from './components/CommentsModal';
+import ShareSheet from './components/ShareSheet';
 import { REPORT_REASONS, reportContent, blockUser, getHiddenUserIds } from '../lib/safety';
 import { cacheGet, cacheSet, withTimeout } from '../lib/cache';
 
@@ -57,6 +56,7 @@ export default function FeedScreen() {
   const [showComposer, setShowComposer] = useState(false);
   const [commentsPostId, setCommentsPostId] = useState<string | null>(null);
   const [commentsPostOwnerId, setCommentsPostOwnerId] = useState<string | null>(null);
+  const [sharingPost, setSharingPost] = useState<any | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -93,6 +93,7 @@ export default function FeedScreen() {
         setCommentsPostId((v) => (v !== null ? null : v));
         setShowComposer((v) => (v ? false : v));
         setHighlightPostId((v) => (v !== null ? null : v));
+        setSharingPost((v: any) => (v !== null ? null : v));
       };
     }, [])
   );
@@ -231,30 +232,9 @@ export default function FeedScreen() {
     setRefreshing(false);
   }
 
-  // Downloads the post's media to a uniquely-named cache file (unique name avoids
-  // "file already exists" on repeat shares), then hands it to the OS share sheet.
-  // Using React Native's built-in Share (not react-native-share) means the sheet
-  // itself offers Instagram, Snapchat, Messages, etc. — no fragile per-app native
-  // targets to freeze on. Every share carries the "Shared via Narrows" text tag.
-  async function sharePost(post: any) {
-    const TAG = 'Shared via Narrows · narrows.site';
-    try {
-      // caption-only post: nothing to download, just share the text
-      if (!post.image_url && !post.video_url) {
-        await Share.share({ message: `${post.caption ? post.caption + '\n\n' : ''}${TAG}` });
-        return;
-      }
-
-      const remoteUrl = post.video_url ?? post.image_url;
-      const ext = post.video_url ? 'mp4' : 'jpg';
-      const dest = new File(Paths.cache, `narrows-share-${Date.now()}.${ext}`);
-      const file = await File.downloadFileAsync(remoteUrl, dest);
-
-      // iOS: `url` attaches the media to the sheet; `message` adds the tag caption.
-      await Share.share({ url: file.uri, message: TAG });
-    } catch {
-      Alert.alert('Could not share', 'Something went wrong sharing this post.');
-    }
+  // opens the custom Instagram-style share sheet for this post
+  function sharePost(post: any) {
+    setSharingPost(post);
   }
 
   // "⋯" menu on a post: report it, and (if it's not yours) block the author.
@@ -508,6 +488,11 @@ export default function FeedScreen() {
         postOwnerId={commentsPostOwnerId}
         onClose={() => setCommentsPostId(null)}
         onCommentAdded={loadPosts}
+      />
+      <ShareSheet
+        visible={sharingPost !== null}
+        post={sharingPost}
+        onClose={() => setSharingPost(null)}
       />
     </SafeAreaView>
   );
