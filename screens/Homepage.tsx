@@ -8,6 +8,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons} from '@expo/vector-icons';
 import { getWeather, Weather} from '../lib/weather';
 import { Marina, loadHomeData, getCachedHomeData } from '../lib/homeData';
+import { useAccount } from '../contexts/AccountContext';
 import WindCompass from './components/WindCompass';
 
 // shown behind the marina name if a marina has no image_url yet
@@ -66,6 +67,8 @@ export default function Homepage(){
   const [refreshing, setRefreshing] = useState(false);
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
+  // marina: null until an admin approves + links the marina application
+  const { accountType, marina: ownedMarina, loading: accountLoading } = useAccount();
 
     // Splash usually already prefetched this data in parallel with its own
     // logo display — if so, use it immediately with no loader. Otherwise
@@ -148,6 +151,17 @@ export default function Homepage(){
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.gold} />}
       >
+        {/* Marina account, still under manual review — visible right away on
+            login rather than only inside the Requests tab */}
+        {!accountLoading && accountType === 'marina' && !ownedMarina && (
+          <View style={styles.alertBanner}>
+            <Ionicons name="hourglass-outline" size={16} color={Colors.gold} />
+            <Text style={styles.alertText}>
+              Your marina is waiting on approval — we'll notify you once it's live.
+            </Text>
+          </View>
+        )}
+
         {/* Water alert — only shows when a marina has an active alert */}
         {marina?.water_alert ? (
           <View style={styles.alertBanner}>

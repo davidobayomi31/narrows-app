@@ -19,6 +19,7 @@ import { supabase } from '../../lib/supabase';
 import { friendlyError } from '../../lib/errors';
 import { containsBlockedWords } from '../../lib/moderation';
 import { REPORT_REASONS, reportContent, getHiddenUserIds } from '../../lib/safety';
+import DismissKeyboardView from './DismissKeyboardView';
 
 type Props = {
   visible: boolean;
@@ -237,8 +238,9 @@ export default function CommentsModal({ visible, postId, postOwnerId, onClose, o
             </TouchableOpacity>
           </View>
 
+          <DismissKeyboardView style={styles.scroll}>
           <ScrollView
-            style={styles.scroll}
+            style={{ flex: 1 }}
             contentContainerStyle={styles.list}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
@@ -262,6 +264,7 @@ export default function CommentsModal({ visible, postId, postOwnerId, onClose, o
               ))
             )}
           </ScrollView>
+          </DismissKeyboardView>
 
           {editingId && (
             <View style={styles.editingBanner}>

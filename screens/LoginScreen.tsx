@@ -11,6 +11,7 @@ import {supabase}  from '../lib/supabase';
 import { friendlyError } from '../lib/errors'
 import { signInWithApple } from '../lib/appleAuth';
 import { signInWithGoogle } from '../lib/googleAuth';
+import DismissKeyboardView from './components/DismissKeyboardView';
 
 export default function LoginScreen() {
   // tracks what the user types in each field
@@ -83,6 +84,7 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       {/* allows the screen to scroll if content overflows */}
+      <DismissKeyboardView>
       <ScrollView
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
@@ -168,6 +170,7 @@ export default function LoginScreen() {
         </TouchableOpacity>
 
       </ScrollView>
+      </DismissKeyboardView>
     </KeyboardAvoidingView>
    </SafeAreaView>
   );

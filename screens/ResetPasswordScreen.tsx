@@ -7,12 +7,15 @@ import {
   SafeAreaView,
   Alert,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useState } from 'react';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
 import { friendlyError } from '../lib/errors';
+import DismissKeyboardView from './components/DismissKeyboardView';
 
 export default function ResetPasswordScreen() {
   const navigation = useNavigation<any>();
@@ -48,31 +51,35 @@ export default function ResetPasswordScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        <Text style={styles.title}>Enter your code</Text>
-        <Text style={styles.subtitle}>We sent a code to {email}</Text>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <DismissKeyboardView>
+          <View style={styles.container}>
+            <Text style={styles.title}>Enter your code</Text>
+            <Text style={styles.subtitle}>We sent a code to {email}</Text>
 
-        <TextInput
-          style={[styles.input, styles.codeInput, codeError ? styles.inputError : null]}
-          placeholder="123456"
-          placeholderTextColor="#8899AA"
-          keyboardType="number-pad"
-          maxLength={6}
-          textContentType="oneTimeCode"
-          autoComplete="one-time-code"
-          value={code}
-          onChangeText={setCode}
-        />
-        {codeError ? <Text style={styles.errorText}>{codeError}</Text> : null}
+            <TextInput
+              style={[styles.input, styles.codeInput, codeError ? styles.inputError : null]}
+              placeholder="123456"
+              placeholderTextColor="#8899AA"
+              keyboardType="number-pad"
+              maxLength={6}
+              textContentType="oneTimeCode"
+              autoComplete="one-time-code"
+              value={code}
+              onChangeText={setCode}
+            />
+            {codeError ? <Text style={styles.errorText}>{codeError}</Text> : null}
 
-        <TouchableOpacity style={styles.button} onPress={verifyCode} disabled={loading}>
-          {loading ? (
-            <ActivityIndicator color={Colors.background} />
-          ) : (
-            <Text style={styles.buttonText}>Verify</Text>
-          )}
-        </TouchableOpacity>
-      </View>
+            <TouchableOpacity style={styles.button} onPress={verifyCode} disabled={loading}>
+              {loading ? (
+                <ActivityIndicator color={Colors.background} />
+              ) : (
+                <Text style={styles.buttonText}>Verify</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </DismissKeyboardView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

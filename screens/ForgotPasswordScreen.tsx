@@ -7,12 +7,15 @@ import {
   SafeAreaView,
   Alert,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
 import { friendlyError } from '../lib/errors';
+import DismissKeyboardView from './components/DismissKeyboardView';
 
 export default function ForgotPasswordScreen() {
   const navigation = useNavigation<any>();
@@ -42,35 +45,39 @@ export default function ForgotPasswordScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        <Text style={styles.title}>Reset your password</Text>
-        <Text style={styles.subtitle}>
-          Enter the email on your account and we'll send you a code to reset your password.
-        </Text>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <DismissKeyboardView>
+          <View style={styles.container}>
+            <Text style={styles.title}>Reset your password</Text>
+            <Text style={styles.subtitle}>
+              Enter the email on your account and we'll send you a code to reset your password.
+            </Text>
 
-        <TextInput
-          style={[styles.input, emailError ? styles.inputError : null]}
-          placeholder="Email"
-          placeholderTextColor="#8899AA"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          value={email}
-          onChangeText={setEmail}
-        />
-        {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
+            <TextInput
+              style={[styles.input, emailError ? styles.inputError : null]}
+              placeholder="Email"
+              placeholderTextColor="#8899AA"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              value={email}
+              onChangeText={setEmail}
+            />
+            {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
 
-        <TouchableOpacity style={styles.button} onPress={sendResetCode} disabled={loading}>
-          {loading ? (
-            <ActivityIndicator color={Colors.background} />
-          ) : (
-            <Text style={styles.buttonText}>Send Code</Text>
-          )}
-        </TouchableOpacity>
+            <TouchableOpacity style={styles.button} onPress={sendResetCode} disabled={loading}>
+              {loading ? (
+                <ActivityIndicator color={Colors.background} />
+              ) : (
+                <Text style={styles.buttonText}>Send Code</Text>
+              )}
+            </TouchableOpacity>
 
-        <TouchableOpacity style={styles.backRow} onPress={() => navigation.goBack()}>
-          <Text style={styles.backText}>Back to log in</Text>
-        </TouchableOpacity>
-      </View>
+            <TouchableOpacity style={styles.backRow} onPress={() => navigation.goBack()}>
+              <Text style={styles.backText}>Back to log in</Text>
+            </TouchableOpacity>
+          </View>
+        </DismissKeyboardView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

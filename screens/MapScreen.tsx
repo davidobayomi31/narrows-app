@@ -15,6 +15,7 @@ import * as Location from 'expo-location';
 import { Pedometer } from 'expo-sensors';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
+import DismissKeyboardView from './components/DismissKeyboardView';
 import { supabase } from '../lib/supabase';
 import { cacheGet, cacheSet, withTimeout } from '../lib/cache';
 import { friendlyError } from '../lib/errors';
@@ -518,6 +519,7 @@ export default function MapScreen() {
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             style={styles.sheet}
           >
+            <DismissKeyboardView style={{ flex: 0 }}>
             <Text style={styles.sheetTitle}>New catch pin</Text>
             <TextInput
               style={styles.input}
@@ -542,6 +544,7 @@ export default function MapScreen() {
                 <Text style={styles.saveText}>{saving ? 'Saving…' : 'Save pin'}</Text>
               </TouchableOpacity>
             </View>
+            </DismissKeyboardView>
           </KeyboardAvoidingView>
         </View>
       </Modal>

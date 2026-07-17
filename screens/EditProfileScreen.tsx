@@ -14,6 +14,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
 import { friendlyError } from '../lib/errors';
+import DismissKeyboardView from './components/DismissKeyboardView';
 
 export default function EditProfileScreen() {
   const navigation = useNavigation<any>();
@@ -124,6 +125,7 @@ export default function EditProfileScreen() {
   }
 
   return (
+    <DismissKeyboardView>
     <ScrollView
       style={styles.screen}
       contentContainerStyle={styles.content}
@@ -168,6 +170,7 @@ export default function EditProfileScreen() {
         <Text style={styles.saveText}>{saving ? 'Saving…' : 'Save'}</Text>
       </TouchableOpacity>
     </ScrollView>
+    </DismissKeyboardView>
   );
 }
 

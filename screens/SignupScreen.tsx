@@ -22,6 +22,7 @@ import { friendlyError } from '../lib/errors';
 import { signInWithApple } from '../lib/appleAuth';
 import { signInWithGoogle } from '../lib/googleAuth';
 import { PRIVACY_URL, TERMS_URL } from '../constants/legal';
+import DismissKeyboardView from './components/DismissKeyboardView';
 
 // structural email check: something@something.tld, no spaces
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -191,6 +192,7 @@ if (lastName.trim().length < 1) {
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
+      <DismissKeyboardView>
       <ScrollView
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
@@ -344,6 +346,7 @@ if (lastName.trim().length < 1) {
         </TouchableOpacity>
 
       </ScrollView>
+      </DismissKeyboardView>
     </KeyboardAvoidingView>
     </SafeAreaView>
   );

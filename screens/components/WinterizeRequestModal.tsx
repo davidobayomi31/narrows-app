@@ -15,6 +15,7 @@ import {
 import { Colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
 import { friendlyError } from '../../lib/errors';
+import DismissKeyboardView from './DismissKeyboardView';
 
 type Props = {
   visible: boolean;
@@ -117,6 +118,7 @@ export default function WinterizeRequestModal({ visible, marinaId, marinaProfile
         <Pressable style={styles.spacer} onPress={close} />
         <KeyboardAvoidingView style={styles.sheet} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.handle} />
+          <DismissKeyboardView style={{ flex: 0 }}>
           <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
             <Text style={styles.title}>Winterize My Boat</Text>
             <Text style={styles.subtitle}>
@@ -219,6 +221,7 @@ export default function WinterizeRequestModal({ visible, marinaId, marinaProfile
               <Text style={styles.submitButtonText}>{saving ? 'Sending…' : 'Send Request'}</Text>
             </TouchableOpacity>
           </ScrollView>
+          </DismissKeyboardView>
         </KeyboardAvoidingView>
       </View>
     </Modal>

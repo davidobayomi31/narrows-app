@@ -7,12 +7,15 @@ import {
   SafeAreaView,
   Alert,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
 import { friendlyError } from '../lib/errors';
+import DismissKeyboardView from './components/DismissKeyboardView';
 
 export default function SetNewPasswordScreen() {
   const navigation = useNavigation<any>();
@@ -44,28 +47,32 @@ export default function SetNewPasswordScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        <Text style={styles.title}>Set a new password</Text>
-        <Text style={styles.subtitle}>Choose a new password for your account.</Text>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <DismissKeyboardView>
+          <View style={styles.container}>
+            <Text style={styles.title}>Set a new password</Text>
+            <Text style={styles.subtitle}>Choose a new password for your account.</Text>
 
-        <TextInput
-          style={[styles.input, passwordError ? styles.inputError : null]}
-          placeholder="New password"
-          placeholderTextColor="#8899AA"
-          secureTextEntry
-          value={newPassword}
-          onChangeText={setNewPassword}
-        />
-        {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
+            <TextInput
+              style={[styles.input, passwordError ? styles.inputError : null]}
+              placeholder="New password"
+              placeholderTextColor="#8899AA"
+              secureTextEntry
+              value={newPassword}
+              onChangeText={setNewPassword}
+            />
+            {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
 
-        <TouchableOpacity style={styles.button} onPress={savePassword} disabled={loading}>
-          {loading ? (
-            <ActivityIndicator color={Colors.background} />
-          ) : (
-            <Text style={styles.buttonText}>Save Password</Text>
-          )}
-        </TouchableOpacity>
-      </View>
+            <TouchableOpacity style={styles.button} onPress={savePassword} disabled={loading}>
+              {loading ? (
+                <ActivityIndicator color={Colors.background} />
+              ) : (
+                <Text style={styles.buttonText}>Save Password</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </DismissKeyboardView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

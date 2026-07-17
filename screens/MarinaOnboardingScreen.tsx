@@ -15,6 +15,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
 import { friendlyError } from '../lib/errors';
+import DismissKeyboardView from './components/DismissKeyboardView';
 
 // 4-question marina signup. Submits a marina_applications row for YOU to review
 // manually (see supabase/marina_winterization.sql) — no self-serve verification,
@@ -75,6 +76,7 @@ export default function MarinaOnboardingScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <DismissKeyboardView>
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
           <Text style={styles.title}>Tell us about your marina</Text>
           <Text style={styles.subtitle}>
@@ -166,6 +168,7 @@ export default function MarinaOnboardingScreen() {
             <Text style={styles.submitButtonText}>{saving ? 'Submitting…' : 'Submit for Review'}</Text>
           </TouchableOpacity>
         </ScrollView>
+        </DismissKeyboardView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

@@ -19,6 +19,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { friendlyError } from '../../lib/errors';
 import { containsBlockedWords } from '../../lib/moderation';
+import DismissKeyboardView from './DismissKeyboardView';
 
 // cap uploads so a giant photo can't blow through storage/egress.
 // Photos are already compressed at quality 0.7, so this only catches extremes.
@@ -326,6 +327,7 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost, t
             style={styles.modalSheet}
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           >
+              <DismissKeyboardView style={{ flex: 0 }}>
               <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" showsVerticalScrollIndicator={false}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>{editingPost ? 'Edit Post' : 'New Post'}</Text>
@@ -431,6 +433,7 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost, t
                 </Text>
               </TouchableOpacity>
               </ScrollView>
+              </DismissKeyboardView>
           </KeyboardAvoidingView>
 
           {/* Full-screen image viewer — an overlay INSIDE this Modal (a second

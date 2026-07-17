@@ -18,6 +18,7 @@ import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
 import { friendlyError } from '../lib/errors';
 import { useAccount } from '../contexts/AccountContext';
+import DismissKeyboardView from './components/DismissKeyboardView';
 
 const FILTERS = ['All', 'Requested', 'Approved', 'In Progress', 'Completed', 'Declined'];
 const FILTER_STATUS: Record<string, string> = {
@@ -249,6 +250,7 @@ export default function MarinaRequestsScreen() {
       <Modal visible={!!selected} animationType="slide" transparent onRequestClose={() => setSelected(null)}>
         <View style={styles.backdrop}>
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.sheet}>
+            <DismissKeyboardView>
             <ScrollView keyboardShouldPersistTaps="handled">
               {selected && (
                 <>
@@ -327,6 +329,7 @@ export default function MarinaRequestsScreen() {
                 </>
               )}
             </ScrollView>
+            </DismissKeyboardView>
           </KeyboardAvoidingView>
         </View>
       </Modal>
