@@ -82,10 +82,7 @@ export default function App(){
       <StatusBar style="light" />
       <Stack.Navigator
         initialRouteName='Splash'
-        // freezeOnBlur:false — with the New Architecture, react-native-screens
-        // can leave a screen's touch handling detached after it's un-frozen on
-        // return (e.g. Profile → Settings → back → Settings froze the UI).
-        screenOptions={{ headerShown: false, freezeOnBlur: false }}
+        screenOptions={{ headerShown: false }}
       >
         <Stack.Screen name='Splash' component={SplashScreen} />
         <Stack.Screen name='Login' component={LoginScreen} />

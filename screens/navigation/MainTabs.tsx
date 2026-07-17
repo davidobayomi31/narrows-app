@@ -14,9 +14,6 @@ export default function MainTabs() {
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        // keep tab screens interactive after returning from a pushed screen
-        // (New Architecture freeze-on-blur can leave them touch-dead otherwise)
-        freezeOnBlur: false,
         tabBarActiveTintColor: Colors.gold,
         tabBarInactiveTintColor: '#8E8E93',
         tabBarHideOnKeyboard: true,

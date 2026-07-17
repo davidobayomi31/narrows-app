@@ -69,7 +69,8 @@ export default function LoginScreen() {
       if (error){
         Alert.alert('Login failed', friendlyError(error));
       } else {
-        navigation.navigate('Main');
+        // reset so Main is the single root (no stacked Login/Main duplicates)
+        navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
       }
     } 
   }

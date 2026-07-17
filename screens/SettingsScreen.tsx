@@ -69,7 +69,9 @@ export default function SettingsScreen() {
           style: 'destructive',
           onPress: async () => {
             await supabase.auth.signOut();
-            navigation.navigate('Login');
+            // reset so Login is the single root — otherwise the next sign-in
+            // pushes a second Main behind this Settings and navigation breaks.
+            navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
           },
         },
       ]
@@ -108,7 +110,7 @@ export default function SettingsScreen() {
                       return;
                     }
                     await supabase.auth.signOut();
-                    navigation.navigate('Login');
+                    navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
                   },
                 },
               ]

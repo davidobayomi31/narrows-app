@@ -68,7 +68,7 @@ export default function OnboardingScreen(){
            setStep (step + 1);
         }else{
             await save_profile();
-            navigation.navigate('Main')
+            navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
         }
     }
     //skips questioning and moves on

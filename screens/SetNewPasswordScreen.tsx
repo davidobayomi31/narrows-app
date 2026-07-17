@@ -38,7 +38,7 @@ export default function SetNewPasswordScreen() {
       Alert.alert('Something went wrong', friendlyError(error));
     } else {
       Alert.alert('Password updated', 'Please log in with your new password.');
-      navigation.navigate('Login');
+      navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
     }
   }
 

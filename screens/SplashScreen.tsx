@@ -31,15 +31,17 @@ export default function SplashScreen(){
                 // loadHomeData() never rejects (it falls back to cache offline),
                 // so the splash always moves on instead of hanging on the logo.
                 await Promise.all([loadHomeData(), minDisplay]);
-                navigation.navigate('Main');
+                // reset (not navigate) so Main is the single root — prevents
+                // duplicate Main/Login entries stacking up across auth changes.
+                navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
             } else {
                 await minDisplay;
-                navigation.navigate('Login');
+                navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
             }
         } catch {
             // last-resort guard: never strand the user on the splash screen
             await minDisplay;
-            navigation.navigate('Login');
+            navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
         }
     }
 

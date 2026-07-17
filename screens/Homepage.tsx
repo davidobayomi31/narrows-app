@@ -313,7 +313,7 @@ export default function Homepage(){
       <View style={[styles.floatingHeader, { height: insets.top + 44, paddingTop: insets.top }]}>
         <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
         <View style={styles.headerInner}>
-          <Text style={styles.headerTitle}>NARROWS</Text>
+          <Text style={styles.headerTitle}>Narrows</Text>
         </View>
       </View>
     </View>
@@ -405,7 +405,7 @@ const styles = StyleSheet.create({
     color: Colors.cream,
     fontSize: 22,
     fontWeight: 'bold',
-    letterSpacing: 6,
+    letterSpacing: 2,
   },
   marinaDropdown: {
     borderWidth: 1,
