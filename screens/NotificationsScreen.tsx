@@ -101,15 +101,23 @@ export default function NotificationsScreen() {
               <View style={styles.iconWrap}>
                 {item.type === 'like' ? (
                   <MaterialCommunityIcons name="anchor" size={18} color={Colors.gold} />
+                ) : item.type === 'winterization' ? (
+                  <Ionicons name="snow" size={16} color={Colors.gold} />
                 ) : (
                   <Ionicons name="chatbubble" size={16} color={Colors.gold} />
                 )}
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.text}>
-                  <Text style={styles.name}>{name}</Text>
-                  {item.type === 'like' ? ' liked your post' : ' commented on your post'}
-                  {item.type === 'comment' && item.comment_body ? `: "${item.comment_body}"` : ''}
+                  {item.type === 'winterization' ? (
+                    item.comment_body
+                  ) : (
+                    <>
+                      <Text style={styles.name}>{name}</Text>
+                      {item.type === 'like' ? ' liked your post' : ' commented on your post'}
+                      {item.type === 'comment' && item.comment_body ? `: "${item.comment_body}"` : ''}
+                    </>
+                  )}
                 </Text>
                 <Text style={styles.time}>{timeAgo(item.created_at)}</Text>
               </View>

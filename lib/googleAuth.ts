@@ -17,7 +17,7 @@ GoogleSignin.configure({
 // Runs the native Google Sign-In flow, exchanges the ID token for a Supabase
 // session, and decides where to send the user next.
 // Returns the destination route, or null if cancelled / failed (alert shown).
-export async function signInWithGoogle(): Promise<'Main' | 'Onboarding' | null> {
+export async function signInWithGoogle(): Promise<'Main' | 'AccountType' | null> {
   try {
     await GoogleSignin.hasPlayServices();
     const response = await GoogleSignin.signIn();
@@ -52,14 +52,14 @@ export async function signInWithGoogle(): Promise<'Main' | 'Onboarding' | null> 
       });
     }
 
-    // returning user has a profile → app; brand-new user → onboarding
+    // returning user has a profile → app; brand-new user → pick account type
     const { data: profile } = await supabase
       .from('profiles')
       .select('id')
       .eq('id', data.user.id)
       .maybeSingle();
 
-    return profile ? 'Main' : 'Onboarding';
+    return profile ? 'Main' : 'AccountType';
   } catch (e: any) {
     if (isErrorWithCode(e) && e.code === statusCodes.SIGN_IN_CANCELLED) return null;
     Alert.alert('Sign in failed', 'Could not sign in with Google. Please try again.');

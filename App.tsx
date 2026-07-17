@@ -8,6 +8,8 @@ import LoginScreen from './screens/LoginScreen';
 import SplashScreen from './screens/SplashScreen';
 import SignupScreen from './screens/SignupScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
+import AccountTypeScreen from './screens/AccountTypeScreen';
+import MarinaOnboardingScreen from './screens/MarinaOnboardingScreen';
 import ConfirmEmailScreen from './screens/ConfirmEmailScreen';
 import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 import ResetPasswordScreen from './screens/ResetPasswordScreen';
@@ -16,6 +18,7 @@ import SettingsScreen from './screens/SettingsScreen';
 import EditProfileScreen from './screens/EditProfileScreen';
 import EventsScreen from './screens/EventsScreen';
 import MarinaProfileScreen from './screens/MarinaProfileScreen';
+import MyWinterizationRequestsScreen from './screens/MyWinterizationRequestsScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
 import PostDetailScreen from './screens/PostDetailScreen';
 import { StatusBar } from 'expo-status-bar';
@@ -23,6 +26,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from './constants/colors';
 import { TripProvider } from './contexts/TripContext';
 import { UnitsProvider } from './contexts/UnitsContext';
+import { AccountProvider } from './contexts/AccountContext';
 import { registerForPushNotifications } from './lib/pushNotifications';
 import { supabase } from './lib/supabase';
 
@@ -77,6 +81,7 @@ export default function App(){
 
   return (
     <UnitsProvider>
+    <AccountProvider>
     <TripProvider>
     <NavigationContainer ref={navigationRef} linking={linking}>
       <StatusBar style="light" />
@@ -89,6 +94,8 @@ export default function App(){
         <Stack.Screen name='Signup' component={SignupScreen} />
         <Stack.Screen name='Main' component={MainTabs} />
         <Stack.Screen name='Onboarding' component={OnboardingScreen} />
+        <Stack.Screen name='AccountType' component={AccountTypeScreen} />
+        <Stack.Screen name='MarinaOnboarding' component={MarinaOnboardingScreen} />
         <Stack.Screen name='ConfirmEmail' component={ConfirmEmailScreen} />
         <Stack.Screen name='ForgotPassword' component={ForgotPasswordScreen} />
         <Stack.Screen name='ResetPassword' component={ResetPasswordScreen} />
@@ -124,11 +131,22 @@ export default function App(){
           }}
         />
         <Stack.Screen name='MarinaProfile' component={MarinaProfileScreen} />
+        <Stack.Screen
+          name='MyWinterizationRequests'
+          component={MyWinterizationRequestsScreen}
+          options={{
+            headerShown: true,
+            title: 'Winterization Requests',
+            headerStyle: { backgroundColor: Colors.background },
+            headerTintColor: Colors.cream,
+          }}
+        />
         <Stack.Screen name='Notifications' component={NotificationsScreen} />
         <Stack.Screen name='PostDetail' component={PostDetailScreen} />
       </Stack.Navigator>
     </NavigationContainer>
     </TripProvider>
+    </AccountProvider>
     </UnitsProvider>
   );
 }

@@ -6,7 +6,7 @@ import { supabase } from './supabase';
 // a Supabase session, and decides where to send the user next.
 // Returns the destination route, or null if the user cancelled / it failed
 // (in the failure case an alert has already been shown).
-export async function signInWithApple(): Promise<'Main' | 'Onboarding' | null> {
+export async function signInWithApple(): Promise<'Main' | 'AccountType' | null> {
   try {
     const credential = await AppleAuthentication.signInAsync({
       requestedScopes: [
@@ -42,14 +42,14 @@ export async function signInWithApple(): Promise<'Main' | 'Onboarding' | null> {
     }
 
     // A returning user already has a profile row → straight to the app.
-    // A brand-new user has none yet → send them through onboarding.
+    // A brand-new user has none yet → send them to pick Boater vs Marina Partner.
     const { data: profile } = await supabase
       .from('profiles')
       .select('id')
       .eq('id', data.user.id)
       .maybeSingle();
 
-    return profile ? 'Main' : 'Onboarding';
+    return profile ? 'Main' : 'AccountType';
   } catch (e: any) {
     // user tapped "Cancel" on the Apple sheet — not an error, just stop
     if (e.code === 'ERR_REQUEST_CANCELED') return null;

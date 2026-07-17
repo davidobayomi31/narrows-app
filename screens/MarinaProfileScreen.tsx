@@ -17,7 +17,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
+import { WINTERIZATION_REQUESTS_LIVE } from '../constants/features';
 import { supabase } from '../lib/supabase';
+import WinterizeRequestModal from './components/WinterizeRequestModal';
 
 const MARINA_FALLBACK = 'https://images.unsplash.com/photo-1545671913-b89ac1b4ac10?w=1200&q=80';
 const HERO_OVERLAY = ['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.45)', 'rgba(0,0,0,0.92)'] as const;
@@ -39,6 +41,7 @@ export default function MarinaProfileScreen() {
   const [marina, setMarina] = useState<any>(null);
   const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showWinterize, setShowWinterize] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -129,6 +132,16 @@ export default function MarinaProfileScreen() {
               <Ionicons name="navigate" size={16} color={Colors.black} />
               <Text style={styles.directionsButtonText}>Get Directions</Text>
             </TouchableOpacity>
+
+            {WINTERIZATION_REQUESTS_LIVE && marina.winterization_enabled && (
+              <TouchableOpacity
+                style={styles.winterizeButton}
+                onPress={() => setShowWinterize(true)}
+              >
+                <Ionicons name="snow" size={16} color={Colors.cream} />
+                <Text style={styles.winterizeButtonText}>Winterize My Boat</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </ImageBackground>
 
@@ -161,6 +174,14 @@ export default function MarinaProfileScreen() {
           )}
         </View>
       </ScrollView>
+
+      <WinterizeRequestModal
+        visible={showWinterize}
+        marinaId={marina.id}
+        marinaProfileId={marina.profile_id ?? null}
+        onClose={() => setShowWinterize(false)}
+        onSubmitted={() => setShowWinterize(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -214,6 +235,18 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   directionsButtonText: { color: Colors.black, fontWeight: '700', fontSize: 15 },
+
+  winterizeButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 14,
+    padding: 14,
+    marginTop: 10,
+  },
+  winterizeButtonText: { color: Colors.cream, fontWeight: '700', fontSize: 15 },
 
   postsSection: { paddingHorizontal: 16, paddingTop: 20 },
   sectionTitle: { color: Colors.cream, fontSize: 16, fontWeight: '700', marginBottom: 16 },

@@ -2,14 +2,21 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { Colors } from '../../constants/colors';
+import { useAccount } from '../../contexts/AccountContext';
 import Homepage from '../Homepage';
 import FeedScreen from '../FeedScreen';
 import MapScreen from '../MapScreen';
 import ProfileScreen from '../ProfileScreen';
+import MarinaRequestsScreen from '../MarinaRequestsScreen';
 
 const Tab = createBottomTabNavigator();
 
 export default function MainTabs() {
+  // marina accounts get everything a boater has, PLUS a Requests tab to
+  // track winterization bookings (shows a "pending review" state until
+  // you've approved + linked their marina — see MarinaRequestsScreen).
+  const { accountType } = useAccount();
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -61,6 +68,13 @@ export default function MainTabs() {
         component={MapScreen}
         options={{ tabBarIcon: ({ color, size }) => <Ionicons name="map-outline" size={size} color={color} /> }}
       />
+      {accountType === 'marina' && (
+        <Tab.Screen
+          name="Requests"
+          component={MarinaRequestsScreen}
+          options={{ tabBarIcon: ({ color, size }) => <Ionicons name="snow-outline" size={size} color={color} /> }}
+        />
+      )}
       <Tab.Screen
         name="Profile"
         component={ProfileScreen}

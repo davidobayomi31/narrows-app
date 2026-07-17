@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Linking, Alert } 
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
+import { WINTERIZATION_REQUESTS_LIVE } from '../constants/features';
 import { supabase } from '../lib/supabase';
 import { useUnits } from '../contexts/UnitsContext';
 import { PRIVACY_URL, TERMS_URL, COMMUNITY_GUIDELINES_URL } from '../constants/legal';
@@ -136,6 +137,19 @@ export default function SettingsScreen() {
       <View style={styles.group}>
         <Row icon="person-outline" label="Edit Profile" onPress={() => navigation.navigate('EditProfile')} />
       </View>
+
+      {WINTERIZATION_REQUESTS_LIVE && (
+        <>
+          <Text style={styles.section}>WINTERIZATION</Text>
+          <View style={styles.group}>
+            <Row
+              icon="snow-outline"
+              label="My Winterization Requests"
+              onPress={() => navigation.navigate('MyWinterizationRequests')}
+            />
+          </View>
+        </>
+      )}
 
       <Text style={styles.section}>UNITS</Text>
       <View style={styles.group}>

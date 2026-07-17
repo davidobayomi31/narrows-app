@@ -37,7 +37,7 @@ export default function ConfirmEmailScreen() {
     if (error) {
       setCodeError(error.message);
     } else {
-      navigation.navigate('Onboarding');
+      navigation.navigate('AccountType');
     }
   }
 
