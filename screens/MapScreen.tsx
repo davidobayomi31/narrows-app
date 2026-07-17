@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import MapView, { Marker, LongPressEvent, Callout } from 'react-native-maps';
 import * as Location from 'expo-location';
+import { Pedometer } from 'expo-sensors';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
@@ -80,6 +81,22 @@ function formatDepth(meters: number, unit: 'km' | 'mi') {
   return unit === 'mi' ? `${Math.round(meters * 3.28084)} ft` : `${meters.toFixed(1)} m`;
 }
 
+// GPS fixes worse than this (metres of horizontal uncertainty) are what produce
+// "phantom" speed while stationary indoors / near buildings — discard them
+// before they ever reach the speed display.
+const MIN_SPEED_ACCURACY_M = 20;
+// how many recent readings the median smoothing looks at
+const SPEED_SMOOTHING_WINDOW = 5;
+// only suppress speed for "on foot" at plausible walking/running speeds — past
+// this, it's clearly not foot traffic (e.g. walking on deck while under way),
+// so show the real speed regardless of recent steps
+const FOOT_SPEED_CEILING_MPS = 20 / 3.6; // ~20 km/h
+
+function medianOf(values: number[]) {
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)];
+}
+
 function formatElapsed(totalSeconds: number) {
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);
@@ -106,6 +123,13 @@ export default function MapScreen() {
   const [hasLocationPerm, setHasLocationPerm] = useState(false);
   const [speedMps, setSpeedMps] = useState<number | null>(null);
   const speedSubRef = useRef<Location.LocationSubscription | null>(null);
+  // recent accuracy-gated readings, for the median smoothing
+  const speedBufferRef = useRef<number[]>([]);
+  // true while steps have been detected recently — used to hide speed while
+  // walking/running (a boat produces no footfalls)
+  const [onFoot, setOnFoot] = useState(false);
+  const pedSubRef = useRef<{ remove: () => void } | null>(null);
+  const onFootTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [mapType, setMapType] = useState<'standard' | 'satellite'>('standard');
   const [depthM, setDepthM] = useState<number | null>(null);
   // throttles depth re-queries (last point + time we asked the county service)
@@ -178,7 +202,7 @@ export default function MapScreen() {
         speedSubRef.current = await Location.watchPositionAsync(
           { accuracy: Location.Accuracy.High, distanceInterval: 5, timeInterval: 2000 },
           (loc) => {
-            setSpeedMps(loc.coords.speed);
+            processSpeedReading(loc);
             if (depthModeRef.current === 'location') {
               updateDepthFromGps(loc.coords.latitude, loc.coords.longitude);
             }
@@ -189,10 +213,57 @@ export default function MapScreen() {
         active = false;
         speedSubRef.current?.remove();
         speedSubRef.current = null;
+        speedBufferRef.current = [];
         setSpeedMps(null);
       };
     }, [])
   );
+
+  // pedometer — a boat produces no footfalls, so recent steps mean the phone
+  // is being carried on foot (walking to the dock, running, etc). Used to hide
+  // the speed readout so GPS speed while walking doesn't look like boat speed.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      (async () => {
+        const available = await Pedometer.isAvailableAsync().catch(() => false);
+        if (!available || !active) return;
+        const perm = await Pedometer.requestPermissionsAsync().catch(() => null);
+        if (perm?.status !== 'granted' || !active) return;
+
+        pedSubRef.current = Pedometer.watchStepCount(() => {
+          setOnFoot(true);
+          // "on foot" stays true for a short window after the last step, so a
+          // brief pause walking doesn't immediately flip speed back on
+          if (onFootTimeoutRef.current) clearTimeout(onFootTimeoutRef.current);
+          onFootTimeoutRef.current = setTimeout(() => setOnFoot(false), 10000);
+        });
+      })();
+      return () => {
+        active = false;
+        pedSubRef.current?.remove();
+        pedSubRef.current = null;
+        if (onFootTimeoutRef.current) clearTimeout(onFootTimeoutRef.current);
+        onFootTimeoutRef.current = null;
+        setOnFoot(false);
+      };
+    }, [])
+  );
+
+  // accuracy gate + median smoothing — see MIN_SPEED_ACCURACY_M / medianOf above.
+  function processSpeedReading(loc: Location.LocationObject) {
+    const accuracy = loc.coords.accuracy;
+    // a fix iOS itself isn't confident about gets skipped entirely, so it never
+    // enters the smoothing window
+    if (accuracy != null && accuracy > MIN_SPEED_ACCURACY_M) return;
+
+    const raw = loc.coords.speed != null && loc.coords.speed > 0 ? loc.coords.speed : 0;
+    const buf = speedBufferRef.current;
+    buf.push(raw);
+    if (buf.length > SPEED_SMOOTHING_WINDOW) buf.shift();
+
+    setSpeedMps(medianOf(buf));
+  }
 
   // 'map' mode: depth at the centre crosshair, re-queried when the map settles.
   // Tiny moves are skipped so we don't hammer the county service.
@@ -425,8 +496,10 @@ export default function MapScreen() {
         </View>
       )}
 
-      {/* live speed readout — top-right under the map-type toggle */}
-      {hasLocationPerm && (
+      {/* live speed readout — top-right under the map-type toggle. Hidden while
+          recent steps suggest the phone is being carried on foot rather than
+          on the boat, unless the speed itself is well past walking/running range. */}
+      {hasLocationPerm && !(onFoot && (speedMps ?? 0) < FOOT_SPEED_CEILING_MPS) && (
         <View style={styles.speedBox} pointerEvents="none">
           <Text style={styles.speedValue}>{formatSpeed(speedMps)}</Text>
           <Text style={styles.speedCaption}>SPEED</Text>

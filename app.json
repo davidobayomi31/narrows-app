@@ -19,7 +19,8 @@
       "infoPlist": {
         "NSFaceIDUsageDescription": "Narrows uses Face ID to sign you in quickly and securely.",
         "ITSAppUsesNonExemptEncryption": false,
-        "LSApplicationQueriesSchemes": ["whatsapp"]
+        "LSApplicationQueriesSchemes": ["whatsapp"],
+        "NSMotionUsageDescription": "Narrows uses motion data to tell when you're walking so it can hide boat speed readings while you're on foot."
       },
       "supportsTablet": false
     },
