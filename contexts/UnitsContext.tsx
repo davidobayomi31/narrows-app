@@ -7,6 +7,9 @@ export type DistanceUnit = 'km' | 'mi';
 export type TimeUnit = 'hours' | 'minutes';
 // speed is read live from GPS in metres/second; these are display choices.
 export type SpeedUnit = 'kmh' | 'mph' | 'kn';
+// where the Map's depth readout measures: at the boat ('location', the default)
+// or at the map's centre crosshair ('map'), which lets you scout other spots.
+export type DepthMode = 'location' | 'map';
 
 const KM_TO_MI = 0.621371;
 // metres-per-second → display unit
@@ -23,9 +26,11 @@ type UnitsContextValue = {
   distanceUnit: DistanceUnit;
   timeUnit: TimeUnit;
   speedUnit: SpeedUnit;
+  depthMode: DepthMode;
   setDistanceUnit: (u: DistanceUnit) => void;
   setTimeUnit: (u: TimeUnit) => void;
   setSpeedUnit: (u: SpeedUnit) => void;
+  setDepthMode: (m: DepthMode) => void;
   // formatters — pass the raw metric value stored in the DB
   formatDistance: (km: number) => string;
   formatDuration: (hours: number) => string;
@@ -50,6 +55,7 @@ export function UnitsProvider({ children }: { children: ReactNode }) {
   const [distanceUnit, setDistanceUnitState] = useState<DistanceUnit>('km');
   const [timeUnit, setTimeUnitState] = useState<TimeUnit>('hours');
   const [speedUnit, setSpeedUnitState] = useState<SpeedUnit>('kmh');
+  const [depthMode, setDepthModeState] = useState<DepthMode>('location');
 
   // load saved preference once on startup
   useEffect(() => {
@@ -61,6 +67,7 @@ export function UnitsProvider({ children }: { children: ReactNode }) {
           if (saved.distanceUnit) setDistanceUnitState(saved.distanceUnit);
           if (saved.timeUnit) setTimeUnitState(saved.timeUnit);
           if (saved.speedUnit) setSpeedUnitState(saved.speedUnit);
+          if (saved.depthMode) setDepthModeState(saved.depthMode);
         }
       } catch {
         // ignore — fall back to defaults
@@ -68,7 +75,12 @@ export function UnitsProvider({ children }: { children: ReactNode }) {
     })();
   }, []);
 
-  async function persist(next: { distanceUnit: DistanceUnit; timeUnit: TimeUnit; speedUnit: SpeedUnit }) {
+  async function persist(next: {
+    distanceUnit: DistanceUnit;
+    timeUnit: TimeUnit;
+    speedUnit: SpeedUnit;
+    depthMode: DepthMode;
+  }) {
     try {
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     } catch {
@@ -78,17 +90,22 @@ export function UnitsProvider({ children }: { children: ReactNode }) {
 
   function setDistanceUnit(u: DistanceUnit) {
     setDistanceUnitState(u);
-    persist({ distanceUnit: u, timeUnit, speedUnit });
+    persist({ distanceUnit: u, timeUnit, speedUnit, depthMode });
   }
 
   function setTimeUnit(u: TimeUnit) {
     setTimeUnitState(u);
-    persist({ distanceUnit, timeUnit: u, speedUnit });
+    persist({ distanceUnit, timeUnit: u, speedUnit, depthMode });
   }
 
   function setSpeedUnit(u: SpeedUnit) {
     setSpeedUnitState(u);
-    persist({ distanceUnit, timeUnit, speedUnit: u });
+    persist({ distanceUnit, timeUnit, speedUnit: u, depthMode });
+  }
+
+  function setDepthMode(m: DepthMode) {
+    setDepthModeState(m);
+    persist({ distanceUnit, timeUnit, speedUnit, depthMode: m });
   }
 
   function distanceValue(km: number) {
@@ -122,9 +139,11 @@ export function UnitsProvider({ children }: { children: ReactNode }) {
     distanceUnit,
     timeUnit,
     speedUnit,
+    depthMode,
     setDistanceUnit,
     setTimeUnit,
     setSpeedUnit,
+    setDepthMode,
     formatDistance,
     formatDuration,
     formatSpeed,

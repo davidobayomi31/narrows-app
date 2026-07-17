@@ -56,7 +56,16 @@ function Row({
 
 export default function SettingsScreen() {
   const navigation = useNavigation<any>();
-  const { distanceUnit, timeUnit, speedUnit, setDistanceUnit, setTimeUnit, setSpeedUnit } = useUnits();
+  const {
+    distanceUnit,
+    timeUnit,
+    speedUnit,
+    depthMode,
+    setDistanceUnit,
+    setTimeUnit,
+    setSpeedUnit,
+    setDepthMode,
+  } = useUnits();
 
   function logOut() {
     Alert.alert(
@@ -161,6 +170,21 @@ export default function SettingsScreen() {
               { label: 'km/h', value: 'kmh' },
               { label: 'mph', value: 'mph' },
               { label: 'kn', value: 'kn' },
+            ]}
+          />
+        </View>
+      </View>
+
+      <Text style={styles.section}>MAP</Text>
+      <View style={styles.group}>
+        <View style={styles.unitRow}>
+          <Text style={styles.rowLabel}>Depth</Text>
+          <Segmented
+            value={depthMode}
+            onChange={setDepthMode}
+            options={[
+              { label: 'My location', value: 'location' },
+              { label: 'Map center', value: 'map' },
             ]}
           />
         </View>

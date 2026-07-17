@@ -40,6 +40,46 @@ type CatchPin = {
   author?: { first_name: string | null; last_name: string | null };
 };
 
+// Point water-depth lookup via Simcoe County's bathymetry raster "identify".
+// Returns metres below the surface (positive), or null when off-water / no data.
+// Data © County of Simcoe, Open Government Licence – Simcoe County. Reference only.
+const DEPTH_IDENTIFY =
+  'https://maps.simcoe.ca/arcgis/rest/services/Public/Bathymetry_Cache/MapServer/identify';
+
+async function fetchDepthMeters(lat: number, lon: number): Promise<number | null> {
+  const d = 0.01; // small bbox around the point so identify has a map extent
+  const ext = `${lon - d},${lat - d},${lon + d},${lat + d}`;
+  const url =
+    `${DEPTH_IDENTIFY}?geometry=${lon},${lat}&geometryType=esriGeometryPoint&sr=4326` +
+    `&layers=all:0&tolerance=1&mapExtent=${ext}&imageDisplay=400,400,96&returnGeometry=false&f=json`;
+  try {
+    const res = await fetch(url);
+    const json = await res.json();
+    const raw = json?.results?.[0]?.attributes?.['Stretch.Pixel Value'];
+    const val = parseFloat(raw);
+    if (raw == null || raw === 'NoData' || Number.isNaN(val)) return null;
+    return Math.abs(val); // stored as negative elevation below the surface
+  } catch {
+    return null;
+  }
+}
+
+// metres between two coords, to throttle depth re-queries as the boat moves
+function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371000;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+function formatDepth(meters: number, unit: 'km' | 'mi') {
+  return unit === 'mi' ? `${Math.round(meters * 3.28084)} ft` : `${meters.toFixed(1)} m`;
+}
+
 function formatElapsed(totalSeconds: number) {
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);
@@ -60,13 +100,20 @@ function timeAgo(iso: string) {
 export default function MapScreen() {
   const navigation = useNavigation<any>();
   const { isTracking, elapsedSeconds, distanceKm, startTrip, endTrip } = useTrip();
-  const { formatSpeed } = useUnits();
+  const { formatSpeed, distanceUnit, depthMode } = useUnits();
   const [pins, setPins] = useState<CatchPin[]>([]);
   const [marinas, setMarinas] = useState<MarinaPin[]>([]);
   const [hasLocationPerm, setHasLocationPerm] = useState(false);
   const [speedMps, setSpeedMps] = useState<number | null>(null);
   const speedSubRef = useRef<Location.LocationSubscription | null>(null);
   const [mapType, setMapType] = useState<'standard' | 'satellite'>('standard');
+  const [depthM, setDepthM] = useState<number | null>(null);
+  // throttles depth re-queries (last point + time we asked the county service)
+  const lastDepthRef = useRef<{ lat: number; lon: number; t: number } | null>(null);
+  // the GPS watcher is set up once, so it reads the live mode through a ref
+  const depthModeRef = useRef(depthMode);
+  // last known map centre, so switching to 'map' mode can seed a reading
+  const regionRef = useRef({ latitude: 44.62, longitude: -79.40 });
   const [userId, setUserId] = useState<string | null>(null);
 
   // trip composer state — opens once a trip ends, pre-filled with tracked stats
@@ -87,6 +134,17 @@ export default function MapScreen() {
     // getSession() is local (no network) so we still know the user offline
     supabase.auth.getSession().then(({ data }) => setUserId(data.session?.user?.id ?? null));
   }, []);
+
+  // switching depth mode clears the old reading; 'map' mode seeds one straight
+  // away from the current centre, 'location' mode waits for the next GPS fix.
+  useEffect(() => {
+    depthModeRef.current = depthMode;
+    lastDepthRef.current = null;
+    setDepthM(null);
+    if (depthMode === 'map') {
+      queryDepthAt(regionRef.current.latitude, regionRef.current.longitude);
+    }
+  }, [depthMode]);
 
   // load marina locations (static pins, separate from community catch pins)
   async function loadMarinas() {
@@ -119,7 +177,12 @@ export default function MapScreen() {
         if (status !== 'granted' || !active) return;
         speedSubRef.current = await Location.watchPositionAsync(
           { accuracy: Location.Accuracy.High, distanceInterval: 5, timeInterval: 2000 },
-          (loc) => setSpeedMps(loc.coords.speed)
+          (loc) => {
+            setSpeedMps(loc.coords.speed);
+            if (depthModeRef.current === 'location') {
+              updateDepthFromGps(loc.coords.latitude, loc.coords.longitude);
+            }
+          }
         );
       })();
       return () => {
@@ -130,6 +193,27 @@ export default function MapScreen() {
       };
     }, [])
   );
+
+  // 'map' mode: depth at the centre crosshair, re-queried when the map settles.
+  // Tiny moves are skipped so we don't hammer the county service.
+  async function queryDepthAt(lat: number, lon: number) {
+    const last = lastDepthRef.current;
+    if (last && haversineMeters(last.lat, last.lon, lat, lon) < 25) return;
+    lastDepthRef.current = { lat, lon, t: Date.now() };
+    const d = await fetchDepthMeters(lat, lon);
+    setDepthM(d);
+  }
+
+  // 'location' mode: depth under the boat. GPS fires far more often than we want
+  // to query, so throttle to once every 12s or ~30m of travel.
+  async function updateDepthFromGps(lat: number, lon: number) {
+    const now = Date.now();
+    const last = lastDepthRef.current;
+    if (last && now - last.t < 12000 && haversineMeters(last.lat, last.lon, lat, lon) < 30) return;
+    lastDepthRef.current = { lat, lon, t: now };
+    const d = await fetchDepthMeters(lat, lon);
+    setDepthM(d);
+  }
 
   // load everyone's catch pins (community layer)
   async function loadPins() {
@@ -238,6 +322,10 @@ export default function MapScreen() {
           longitudeDelta: 0.15,
         }}
         onLongPress={handleLongPress}
+        onRegionChangeComplete={(r) => {
+          regionRef.current = { latitude: r.latitude, longitude: r.longitude };
+          if (depthMode === 'map') queryDepthAt(r.latitude, r.longitude);
+        }}
       >
         {marinas
           .filter((m) => m.latitude != null && m.longitude != null)
@@ -280,6 +368,14 @@ export default function MapScreen() {
         ))}
       </MapView>
 
+      {/* center crosshair — only in 'map' mode, where it marks the measured point */}
+      {depthMode === 'map' && (
+        <View style={styles.centerReticle} pointerEvents="none">
+          <View style={styles.reticleRing} />
+          <View style={styles.reticleDot} />
+        </View>
+      )}
+
       {/* hint pill */}
       {!isTracking && (
         <View style={styles.hint} pointerEvents="none">
@@ -311,6 +407,23 @@ export default function MapScreen() {
       >
         <Ionicons name={mapType === 'standard' ? 'earth' : 'map'} size={20} color={Colors.cream} />
       </TouchableOpacity>
+
+      {/* live water-depth readout — under the speed box, only when over mapped water */}
+      {depthM != null && (
+        <View style={styles.depthBox} pointerEvents="none">
+          <Text style={styles.depthValue}>{formatDepth(depthM, distanceUnit)}</Text>
+          <Text style={styles.depthCaption}>DEPTH</Text>
+        </View>
+      )}
+
+      {/* attribution + safety disclaimer — required whenever depth is shown */}
+      {depthM != null && (
+        <View style={styles.depthCredit} pointerEvents="none">
+          <Text style={styles.depthCreditText}>
+            Depth © Simcoe County (OGL) · reference only, not for navigation
+          </Text>
+        </View>
+      )}
 
       {/* live speed readout — top-right under the map-type toggle */}
       {hasLocationPerm && (
@@ -472,6 +585,50 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 10,
   },
+  depthBox: {
+    position: 'absolute',
+    top: 176,
+    right: 16,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    minWidth: 84,
+  },
+  depthValue: { color: '#4FB0E0', fontSize: 18, fontWeight: '800' },
+  depthCaption: { color: Colors.cream, fontSize: 10, fontWeight: '700', letterSpacing: 1, marginTop: 2 },
+  centerReticle: {
+    position: 'absolute',
+    left: '50%',
+    top: '50%',
+    width: 24,
+    height: 24,
+    marginLeft: -12,
+    marginTop: -12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reticleRing: {
+    position: 'absolute',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.85)',
+  },
+  reticleDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#4FB0E0' },
+  depthCredit: {
+    position: 'absolute',
+    bottom: 160,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    maxWidth: '88%',
+  },
+  depthCreditText: { color: Colors.cream, fontSize: 10, textAlign: 'center', lineHeight: 14 },
   speedBox: {
     position: 'absolute',
     top: 112,
