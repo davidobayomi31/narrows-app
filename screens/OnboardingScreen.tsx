@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet,TouchableOpacity,Alert, Linking } from 'react-native';
+import { View, Text, StyleSheet,TouchableOpacity,Alert, Linking, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import {useState, useEffect} from 'react';
@@ -7,6 +7,7 @@ import {Colors} from '../constants/colors';
 import {supabase} from '../lib/supabase';
 import { friendlyError } from '../lib/errors';
 import { PRIVACY_URL, TERMS_URL } from '../constants/legal';
+import DismissKeyboardView from './components/DismissKeyboardView';
 
 export default function OnboardingScreen(){
     const navigation = useNavigation <any>();
@@ -25,14 +26,32 @@ export default function OnboardingScreen(){
     const [ageChecked, setAgeChecked] = useState(false);
     const [termsChecked, setTermsChecked] = useState(false);
 
+    // Apple only shares your name on the very first-ever Sign in with Apple for
+    // this app; Google can also omit it. When that happens, ask for it here
+    // instead of leaving the account permanently stuck showing "Boater".
+    const [needsName, setNeedsName] = useState(false);
+    const [firstName, setFirstName] = useState('');
+    const [lastName, setLastName] = useState('');
+    const [nameError, setNameError] = useState('');
+
     useEffect(() => {
         (async () => {
             const { data: { user } } = await supabase.auth.getUser();
             // already consented (email/social signup users) → skip the gate
             if (user?.user_metadata?.terms_accepted_at) setConsentDone(true);
+            if (!user?.user_metadata?.first_name) setNeedsName(true);
             setCheckingConsent(false);
         })();
     }, []);
+
+    function saveName() {
+        if (!firstName.trim()) {
+            setNameError('Please enter your first name');
+            return;
+        }
+        setNameError('');
+        setNeedsName(false);
+    }
 
     async function acceptConsent() {
         if (!ageChecked || !termsChecked) return;
@@ -50,8 +69,8 @@ export default function OnboardingScreen(){
         //save or updates this user profile
         const { error } = await supabase.from ('profiles').upsert ({
             id: user.id,
-            first_name: user.user_metadata.first_name,
-            last_name: user.user_metadata.last_name,
+            first_name: firstName.trim() || user.user_metadata.first_name,
+            last_name: lastName.trim() || user.user_metadata.last_name || '',
             boat_ownership: ownsBoat,
             region: region,
             experience_level: exprience,
@@ -111,6 +130,42 @@ export default function OnboardingScreen(){
                         <Text style={styles.nextButtonText}>Continue</Text>
                     </TouchableOpacity>
                 </View>
+            </SafeAreaView>
+        );
+    }
+
+    // Apple/Google didn't provide a name — ask for it before continuing
+    if (needsName) {
+        return (
+            <SafeAreaView style={styles.safeArea}>
+                <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+                    <DismissKeyboardView>
+                        <View style={styles.container}>
+                            <Text style={styles.question}>What's your name?</Text>
+                            <Text style={styles.subtitle}>This is how other boaters will see you on Narrows.</Text>
+
+                            <TextInput
+                                style={[styles.nameInput, nameError ? styles.nameInputError : null]}
+                                placeholder="First name"
+                                placeholderTextColor="#8899AA"
+                                value={firstName}
+                                onChangeText={setFirstName}
+                            />
+                            <TextInput
+                                style={styles.nameInput}
+                                placeholder="Last name"
+                                placeholderTextColor="#8899AA"
+                                value={lastName}
+                                onChangeText={setLastName}
+                            />
+                            {nameError ? <Text style={styles.nameErrorText}>{nameError}</Text> : null}
+
+                            <TouchableOpacity style={styles.nextButton} onPress={saveName}>
+                                <Text style={styles.nextButtonText}>Continue</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </DismissKeyboardView>
+                </KeyboardAvoidingView>
             </SafeAreaView>
         );
     }
@@ -283,6 +338,25 @@ const styles = StyleSheet.create({
   },
   nextButtonDisabled: {
     opacity: 0.4,
+  },
+  nameInput: {
+    width: '100%',
+    backgroundColor: '#1A1A1A',
+    color: Colors.cream,
+    padding: 16,
+    borderRadius: 12,
+    fontSize: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#333333',
+  },
+  nameInputError: {
+    borderColor: '#FF4444',
+  },
+  nameErrorText: {
+    color: '#FF4444',
+    fontSize: 12,
+    marginBottom: 8,
   },
   consentRow: {
     flexDirection: 'row',

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -33,7 +33,23 @@ export default function MarinaOnboardingScreen() {
   const [numSlips, setNumSlips] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const canSubmit = marinaName.trim().length > 0 && location.trim().length > 0;
+  // Apple only shares your name on the very first-ever Sign in with Apple for
+  // this app; Google can also omit it. When that happens, ask for it here
+  // instead of leaving the account permanently stuck showing "Boater".
+  const [needsName, setNeedsName] = useState(false);
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user?.user_metadata?.first_name) setNeedsName(true);
+    });
+  }, []);
+
+  const canSubmit =
+    marinaName.trim().length > 0 &&
+    location.trim().length > 0 &&
+    (!needsName || firstName.trim().length > 0);
 
   async function submit() {
     if (!canSubmit || saving) return;
@@ -47,8 +63,8 @@ export default function MarinaOnboardingScreen() {
 
     const { error: profileError } = await supabase.from('profiles').upsert({
       id: user.id,
-      first_name: user.user_metadata.first_name,
-      last_name: user.user_metadata.last_name,
+      first_name: needsName ? firstName.trim() : user.user_metadata.first_name,
+      last_name: needsName ? lastName.trim() : (user.user_metadata.last_name ?? ''),
       account_type: 'marina',
     });
 
@@ -82,6 +98,26 @@ export default function MarinaOnboardingScreen() {
           <Text style={styles.subtitle}>
             We manually review every marina before it goes live — this usually takes a day or two.
           </Text>
+
+          {needsName && (
+            <>
+              <Text style={styles.label}>Your name</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="First name"
+                placeholderTextColor="#8899AA"
+                value={firstName}
+                onChangeText={setFirstName}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Last name"
+                placeholderTextColor="#8899AA"
+                value={lastName}
+                onChangeText={setLastName}
+              />
+            </>
+          )}
 
           <Text style={styles.label}>Marina name</Text>
           <TextInput
