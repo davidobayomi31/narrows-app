@@ -70,19 +70,27 @@ export default function MarinaProfileScreen() {
     setLoading(false);
   }
 
+  // Prefer the street address so the map geocodes to the exact spot and shows
+  // a real address label; fall back to coordinates only if we have no address.
   function openDirections() {
-    if (marina?.latitude == null || marina?.longitude == null) return;
-    const { latitude: lat, longitude: lng, name } = marina;
+    if (!marina) return;
+    const { name, address, latitude: lat, longitude: lng } = marina;
+    const destination = address?.trim()
+      ? address.trim()
+      : lat != null && lng != null
+        ? `${lat},${lng}`
+        : null;
+    if (!destination) return;
+    const dest = encodeURIComponent(destination);
     Alert.alert('Get Directions', `Open directions to ${name}?`, [
       {
         text: 'Apple Maps',
-        onPress: () =>
-          Linking.openURL(`http://maps.apple.com/?daddr=${lat},${lng}&q=${encodeURIComponent(name)}`),
+        onPress: () => Linking.openURL(`http://maps.apple.com/?daddr=${dest}`),
       },
       {
         text: 'Google Maps',
         onPress: () =>
-          Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`),
+          Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${dest}`),
       },
       { text: 'Cancel', style: 'cancel' },
     ]);

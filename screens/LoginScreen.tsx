@@ -112,11 +112,14 @@ export default function LoginScreen() {
         {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
 
         <View style={styles.passwordRow}>
+          {/* only mask once there's text — keeps the empty placeholder in the
+              normal font so it matches the Email field (iOS spaces out the
+              placeholder on secureTextEntry fields) */}
           <TextInput
             style={[styles.input, styles.passwordInput, passwordError ? styles.inputError : null]}
             placeholder="Password"
             placeholderTextColor="#8899AA"
-            secureTextEntry={!showPassword}
+            secureTextEntry={!showPassword && password.length > 0}
             value={password}
             onChangeText={setPassword}
           />

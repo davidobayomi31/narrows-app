@@ -242,7 +242,7 @@ if (lastName.trim().length < 1) {
             style={[styles.input, styles.passwordInput, passwordError ? styles.inputError : null]}
             placeholder="Password"
             placeholderTextColor="#8899AA"
-            secureTextEntry={!showPassword}
+            secureTextEntry={!showPassword && password.length > 0}
             value={password}
             onChangeText={setPassword}
           />
@@ -260,7 +260,7 @@ if (lastName.trim().length < 1) {
             style={[styles.input, styles.passwordInput, confirmPasswordError ? styles.inputError : null]}
             placeholder="Confirm Password"
             placeholderTextColor="#8899AA"
-            secureTextEntry={!showConfirmPassword}
+            secureTextEntry={!showConfirmPassword && confirmPassword.length > 0}
             value={confirmPassword}
             onChangeText={setConfirmPassword}
           />
