@@ -369,9 +369,9 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost, t
                   {tripPrefill && (
                     <Text style={styles.tripPrefillNote}>Auto-tracked from GPS — adjust if needed</Text>
                   )}
-                  <TextInput style={styles.fieldInput} placeholder="Duration (hours)" placeholderTextColor={Colors.muted} keyboardType="numeric" value={duration} onChangeText={setDuration} />
-                  <TextInput style={styles.fieldInput} placeholder="Distance (km)" placeholderTextColor={Colors.muted} keyboardType="numeric" value={distance} onChangeText={setDistance} />
-                  <TextInput style={styles.fieldInput} placeholder="Where? (e.g. Narrows to Sparrow Lake)" placeholderTextColor={Colors.muted} value={location} onChangeText={setLocation} />
+                  <TextInput style={styles.fieldInput} placeholder="Duration (hours)" placeholderTextColor={Colors.muted} keyboardType="numeric" value={duration} onChangeText={setDuration} maxLength={8} />
+                  <TextInput style={styles.fieldInput} placeholder="Distance (km)" placeholderTextColor={Colors.muted} keyboardType="numeric" value={distance} onChangeText={setDistance} maxLength={8} />
+                  <TextInput style={styles.fieldInput} placeholder="Where? (e.g. Narrows to Sparrow Lake)" placeholderTextColor={Colors.muted} value={location} onChangeText={setLocation} maxLength={100} />
                 </>
               )}
 
@@ -395,7 +395,7 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost, t
 
               {/* Check-in fields */}
               {activeLog === 'Check-in' && (
-                <TextInput style={[styles.fieldInput, { marginTop: 16 }]} placeholder="Where are you? (marina / location)" placeholderTextColor={Colors.muted} value={location} onChangeText={setLocation} />
+                <TextInput style={[styles.fieldInput, { marginTop: 16 }]} placeholder="Where are you? (marina / location)" placeholderTextColor={Colors.muted} value={location} onChangeText={setLocation} maxLength={100} />
               )}
 
               <TouchableOpacity style={styles.photoButton} onPress={pickImage}>
@@ -425,6 +425,7 @@ export default function PostComposer({ visible, onClose, onSaved, editingPost, t
                 value={caption}
                 onChangeText={setCaption}
                 multiline
+                maxLength={500}
               />
 
               <TouchableOpacity style={[styles.postButton, saving && { opacity: 0.6 }]} onPress={handleSave} disabled={saving}>

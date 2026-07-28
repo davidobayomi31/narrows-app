@@ -148,13 +148,13 @@ export default function EditProfileScreen() {
       </TouchableOpacity>
 
       <Text style={styles.label}>First name</Text>
-      <TextInput style={styles.input} value={firstName} onChangeText={setFirstName} placeholderTextColor={Colors.muted} />
+      <TextInput style={styles.input} value={firstName} onChangeText={setFirstName} placeholderTextColor={Colors.muted} maxLength={50} />
 
       <Text style={styles.label}>Last name</Text>
-      <TextInput style={styles.input} value={lastName} onChangeText={setLastName} placeholderTextColor={Colors.muted} />
+      <TextInput style={styles.input} value={lastName} onChangeText={setLastName} placeholderTextColor={Colors.muted} maxLength={50} />
 
       <Text style={styles.label}>Region</Text>
-      <TextInput style={styles.input} value={region} onChangeText={setRegion} placeholder="e.g. Simcoe County" placeholderTextColor={Colors.muted} />
+      <TextInput style={styles.input} value={region} onChangeText={setRegion} placeholder="e.g. Simcoe County" placeholderTextColor={Colors.muted} maxLength={60} />
 
       <Text style={styles.label}>Bio</Text>
       <TextInput
@@ -164,6 +164,7 @@ export default function EditProfileScreen() {
         placeholder="A little about you…"
         placeholderTextColor={Colors.muted}
         multiline
+        maxLength={300}
       />
 
       <TouchableOpacity style={styles.saveBtn} onPress={save} disabled={saving}>

@@ -62,11 +62,21 @@ export default function SettingsScreen() {
     timeUnit,
     speedUnit,
     depthMode,
+    shallowAlertEnabled,
+    shallowAlertDepthM,
     setDistanceUnit,
     setTimeUnit,
     setSpeedUnit,
     setDepthMode,
+    setShallowAlertEnabled,
+    setShallowAlertDepthM,
   } = useUnits();
+
+  // show the alert threshold in the user's chosen depth unit (ft with miles, m with km)
+  const thresholdLabel =
+    distanceUnit === 'mi'
+      ? `${Math.round(shallowAlertDepthM * 3.28084)} ft`
+      : `${shallowAlertDepthM.toFixed(1)} m`;
 
   function logOut() {
     Alert.alert(
@@ -202,6 +212,42 @@ export default function SettingsScreen() {
             ]}
           />
         </View>
+        <View style={styles.unitRow}>
+          <Text style={styles.rowLabel}>Shallow alert</Text>
+          <Segmented
+            value={shallowAlertEnabled ? 'on' : 'off'}
+            onChange={(v) => setShallowAlertEnabled(v === 'on')}
+            options={[
+              { label: 'Off', value: 'off' },
+              { label: 'On', value: 'on' },
+            ]}
+          />
+        </View>
+        {shallowAlertEnabled && (
+          <View style={styles.unitRow}>
+            <Text style={styles.rowLabel}>Warn under</Text>
+            <View style={styles.stepper}>
+              <TouchableOpacity
+                style={styles.stepBtn}
+                onPress={() => setShallowAlertDepthM(shallowAlertDepthM - 0.3)}
+              >
+                <Ionicons name="remove" size={18} color={Colors.cream} />
+              </TouchableOpacity>
+              <Text style={styles.stepValue}>{thresholdLabel}</Text>
+              <TouchableOpacity
+                style={styles.stepBtn}
+                onPress={() => setShallowAlertDepthM(shallowAlertDepthM + 0.3)}
+              >
+                <Ionicons name="add" size={18} color={Colors.cream} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+      </View>
+
+      <Text style={styles.section}>TRIPS</Text>
+      <View style={styles.group}>
+        <Row icon="navigate-outline" label="My Trips" onPress={() => navigation.navigate('Trips')} />
       </View>
 
       <Text style={styles.section}>LEGAL</Text>
@@ -265,4 +311,19 @@ const styles = StyleSheet.create({
   segmentItemActive: { backgroundColor: Colors.gold },
   segmentText: { color: Colors.muted, fontSize: 13, fontWeight: '600' },
   segmentTextActive: { color: Colors.black, fontWeight: '700' },
+  stepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: 10,
+    padding: 2,
+  },
+  stepBtn: { paddingHorizontal: 12, paddingVertical: 6 },
+  stepValue: {
+    color: Colors.cream,
+    fontSize: 14,
+    fontWeight: '700',
+    minWidth: 52,
+    textAlign: 'center',
+  },
 });

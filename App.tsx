@@ -21,6 +21,8 @@ import MarinaProfileScreen from './screens/MarinaProfileScreen';
 import MyWinterizationRequestsScreen from './screens/MyWinterizationRequestsScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
 import PostDetailScreen from './screens/PostDetailScreen';
+import TripsScreen from './screens/TripsScreen';
+import TripDetailScreen from './screens/TripDetailScreen';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from './constants/colors';
@@ -29,6 +31,8 @@ import { UnitsProvider } from './contexts/UnitsContext';
 import { AccountProvider } from './contexts/AccountContext';
 import { registerForPushNotifications } from './lib/pushNotifications';
 import { supabase } from './lib/supabase';
+import ErrorBoundary from './screens/components/ErrorBoundary';
+import { logError } from './lib/logError';
 
 const Stack = createNativeStackNavigator();
 // lets us navigate from outside React components (e.g. a push notification tap)
@@ -48,6 +52,17 @@ const linking = {
 
 export default function App(){
   useEffect(() => {
+    // Global safety net for errors thrown outside React's render tree — an
+    // uncaught exception or an unhandled promise rejection. Reports them so a
+    // background crash still triggers an alert. (React render crashes are
+    // caught by <ErrorBoundary> below.)
+    const globalAny = global as any;
+    const prevHandler = globalAny.ErrorUtils?.getGlobalHandler?.();
+    globalAny.ErrorUtils?.setGlobalHandler?.((error: any, isFatal?: boolean) => {
+      logError(error, { source: 'global', extra: { isFatal: !!isFatal } });
+      prevHandler?.(error, isFatal);
+    });
+
     // register this device for push whenever a user is signed in
     registerForPushNotifications();
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
@@ -80,6 +95,7 @@ export default function App(){
   }, []);
 
   return (
+    <ErrorBoundary>
     <UnitsProvider>
     <AccountProvider>
     <TripProvider>
@@ -143,10 +159,22 @@ export default function App(){
         />
         <Stack.Screen name='Notifications' component={NotificationsScreen} />
         <Stack.Screen name='PostDetail' component={PostDetailScreen} />
+        <Stack.Screen
+          name='Trips'
+          component={TripsScreen}
+          options={{
+            headerShown: true,
+            title: 'My Trips',
+            headerStyle: { backgroundColor: Colors.background },
+            headerTintColor: Colors.cream,
+          }}
+        />
+        <Stack.Screen name='TripDetail' component={TripDetailScreen} />
       </Stack.Navigator>
     </NavigationContainer>
     </TripProvider>
     </AccountProvider>
     </UnitsProvider>
+    </ErrorBoundary>
   );
 }

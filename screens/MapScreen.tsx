@@ -9,8 +9,11 @@ import {
   Alert,
   Platform,
   KeyboardAvoidingView,
+  Vibration,
+  ActivityIndicator,
 } from 'react-native';
-import MapView, { Marker, LongPressEvent, Callout } from 'react-native-maps';
+import MapView, { Marker, LongPressEvent, Callout, WMSTile, UrlTile } from 'react-native-maps';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { Pedometer } from 'expo-sensors';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -23,6 +26,22 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTrip } from '../contexts/TripContext';
 import { useUnits } from '../contexts/UnitsContext';
 import PostComposer from './components/PostComposer';
+import {
+  BASE_TILE_URL,
+  BASE_TILES_ENABLED,
+  BASE_TILE_ATTRIBUTION,
+  OFFLINE_MIN_ZOOM,
+  OFFLINE_MAX_ZOOM,
+  OFFLINE_MAX_TILES,
+} from '../constants/mapTiles';
+import {
+  BASE_TILE_CACHE,
+  DEPTH_TILE_CACHE,
+  downloadRegion,
+  estimateTileCount,
+  addRegion,
+  DownloadProgress,
+} from '../lib/offlineTiles';
 
 type MarinaPin = {
   id: string;
@@ -47,6 +66,17 @@ type CatchPin = {
 // Data © County of Simcoe, Open Government Licence – Simcoe County. Reference only.
 const DEPTH_IDENTIFY =
   'https://maps.simcoe.ca/arcgis/rest/services/Public/Bathymetry_Cache/MapServer/identify';
+
+// Depth-shading overlay across the whole visible water. The service is a cached
+// MapServer whose tile levels are numbered 0–11 (they map to web-mercator zoom
+// 9–20), so a plain {z}/{y}/{x} UrlTile would request non-existent levels. We
+// use its dynamic `export` endpoint via <WMSTile>, which requests each tile by
+// bounding box (EPSG:3857) and so is immune to the level-numbering offset.
+// Data © County of Simcoe, Open Government Licence – Simcoe County. Reference only.
+const DEPTH_EXPORT =
+  'https://maps.simcoe.ca/arcgis/rest/services/Public/Bathymetry_Cache/MapServer/export' +
+  '?bbox={minX},{minY},{maxX},{maxY}&bboxSR=3857&imageSR=3857&size={width},{height}' +
+  '&dpi=96&format=png32&transparent=true&f=image';
 
 async function fetchDepthMeters(lat: number, lon: number): Promise<number | null> {
   const d = 0.01; // small bbox around the point so identify has a map extent
@@ -118,7 +148,7 @@ function timeAgo(iso: string) {
 export default function MapScreen() {
   const navigation = useNavigation<any>();
   const { isTracking, elapsedSeconds, distanceKm, startTrip, endTrip } = useTrip();
-  const { formatSpeed, distanceUnit, depthMode } = useUnits();
+  const { formatSpeed, distanceUnit, depthMode, shallowAlertEnabled, shallowAlertDepthM } = useUnits();
   const [pins, setPins] = useState<CatchPin[]>([]);
   const [marinas, setMarinas] = useState<MarinaPin[]>([]);
   const [hasLocationPerm, setHasLocationPerm] = useState(false);
@@ -132,7 +162,16 @@ export default function MapScreen() {
   const pedSubRef = useRef<{ remove: () => void } | null>(null);
   const onFootTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [mapType, setMapType] = useState<'standard' | 'satellite'>('standard');
+  // the depth-shading overlay (whole-water color layer); on by default since
+  // it's the map's headline feature, toggled off from the map for a clean base.
+  const [showDepthLayer, setShowDepthLayer] = useState(true);
   const [depthM, setDepthM] = useState<number | null>(null);
+  // shallow-water warning banner + refs so the GPS watcher (set up once) reads
+  // the live alert settings without being torn down when they change.
+  const [shallowWarning, setShallowWarning] = useState(false);
+  const shallowEnabledRef = useRef(shallowAlertEnabled);
+  const shallowDepthRef = useRef(shallowAlertDepthM);
+  const wasShallowRef = useRef(false);
   // throttles depth re-queries (last point + time we asked the county service)
   const lastDepthRef = useRef<{ lat: number; lon: number; t: number } | null>(null);
   // the GPS watcher is set up once, so it reads the live mode through a ref
@@ -140,6 +179,14 @@ export default function MapScreen() {
   // last known map centre, so switching to 'map' mode can seed a reading
   const regionRef = useRef({ latitude: 44.62, longitude: -79.40 });
   const [userId, setUserId] = useState<string | null>(null);
+
+  // offline maps: when on, the tile layers serve only from the on-device cache
+  // (no network). Persisted so it survives app restarts. mapRef is used to read
+  // the visible bounds when downloading "this area".
+  const mapRef = useRef<MapView>(null);
+  const [offlineMode, setOfflineMode] = useState(false);
+  const [download, setDownload] = useState<DownloadProgress | null>(null);
+  const cancelDownloadRef = useRef(false);
 
   // trip composer state — opens once a trip ends, pre-filled with tracked stats
   const [showTripComposer, setShowTripComposer] = useState(false);
@@ -159,6 +206,18 @@ export default function MapScreen() {
     // getSession() is local (no network) so we still know the user offline
     supabase.auth.getSession().then(({ data }) => setUserId(data.session?.user?.id ?? null));
   }, []);
+
+  // keep the alert refs live for the long-lived GPS watcher; clearing the
+  // banner when the feature (or 'map' depth mode, where depth isn't under the
+  // boat) means an alert no longer applies.
+  useEffect(() => {
+    shallowEnabledRef.current = shallowAlertEnabled;
+    shallowDepthRef.current = shallowAlertDepthM;
+    if (!shallowAlertEnabled || depthMode !== 'location') {
+      wasShallowRef.current = false;
+      setShallowWarning(false);
+    }
+  }, [shallowAlertEnabled, shallowAlertDepthM, depthMode]);
 
   // switching depth mode clears the old reading; 'map' mode seeds one straight
   // away from the current centre, 'location' mode waits for the next GPS fix.
@@ -285,6 +344,30 @@ export default function MapScreen() {
     lastDepthRef.current = { lat, lon, t: now };
     const d = await fetchDepthMeters(lat, lon);
     setDepthM(d);
+    evaluateShallow(d);
+  }
+
+  // Shallow-water alert (location depth mode only). Buzzes once and raises the
+  // banner when depth drops below the threshold; a small hysteresis margin means
+  // it doesn't flicker on/off right at the boundary. Off-water (null depth) is
+  // treated as "no reading", not "safe" — we simply don't alert.
+  function evaluateShallow(d: number | null) {
+    if (!shallowEnabledRef.current || d == null) {
+      if (wasShallowRef.current) {
+        wasShallowRef.current = false;
+        setShallowWarning(false);
+      }
+      return;
+    }
+    const threshold = shallowDepthRef.current;
+    if (!wasShallowRef.current && d < threshold) {
+      wasShallowRef.current = true;
+      setShallowWarning(true);
+      Vibration.vibrate([0, 400, 150, 400]); // buzz once on entering shallow water
+    } else if (wasShallowRef.current && d > threshold + 0.3) {
+      wasShallowRef.current = false;
+      setShallowWarning(false);
+    }
   }
 
   // load everyone's catch pins (community layer)
@@ -399,6 +482,12 @@ export default function MapScreen() {
           if (depthMode === 'map') queryDepthAt(r.latitude, r.longitude);
         }}
       >
+        {/* depth-shading layer — rendered under all markers via the county's
+            dynamic export endpoint, one bbox request per tile */}
+        {showDepthLayer && (
+          <WMSTile urlTemplate={DEPTH_EXPORT} opacity={0.55} tileSize={256} zIndex={-1} />
+        )}
+
         {marinas
           .filter((m) => m.latitude != null && m.longitude != null)
           .map((m) => (
@@ -439,6 +528,26 @@ export default function MapScreen() {
           </Marker>
         ))}
       </MapView>
+
+      {/* depth-layer toggle — top-left, away from the right-hand readout column */}
+      <TouchableOpacity
+        style={styles.depthLayerBtn}
+        onPress={() => setShowDepthLayer((v) => !v)}
+      >
+        <Ionicons
+          name={showDepthLayer ? 'water' : 'water-outline'}
+          size={20}
+          color={showDepthLayer ? '#4FB0E0' : Colors.cream}
+        />
+      </TouchableOpacity>
+
+      {/* shallow-water warning — prominent bar, safety-relevant */}
+      {shallowWarning && depthM != null && (
+        <View style={styles.shallowBanner} pointerEvents="none">
+          <Ionicons name="warning" size={18} color={Colors.white} />
+          <Text style={styles.shallowText}>Shallow water · {formatDepth(depthM, distanceUnit)}</Text>
+        </View>
+      )}
 
       {/* center crosshair — only in 'map' mode, where it marks the measured point */}
       {depthMode === 'map' && (
@@ -488,8 +597,8 @@ export default function MapScreen() {
         </View>
       )}
 
-      {/* attribution + safety disclaimer — required whenever depth is shown */}
-      {depthM != null && (
+      {/* attribution + safety disclaimer — required whenever any depth data is shown */}
+      {(showDepthLayer || depthM != null) && (
         <View style={styles.depthCredit} pointerEvents="none">
           <Text style={styles.depthCreditText}>
             Depth © Simcoe County (OGL) · reference only, not for navigation
@@ -527,6 +636,7 @@ export default function MapScreen() {
               placeholderTextColor={Colors.muted}
               value={species}
               onChangeText={setSpecies}
+              maxLength={40}
             />
             <TextInput
               style={[styles.input, styles.notes]}
@@ -535,6 +645,7 @@ export default function MapScreen() {
               value={notes}
               onChangeText={setNotes}
               multiline
+              maxLength={280}
             />
             <View style={styles.row}>
               <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowComposer(false)}>
@@ -661,6 +772,27 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 10,
   },
+  depthLayerBtn: {
+    position: 'absolute',
+    top: 60,
+    left: 16,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 20,
+    padding: 10,
+  },
+  shallowBanner: {
+    position: 'absolute',
+    top: 110,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#B91C1C',
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  shallowText: { color: Colors.white, fontSize: 14, fontWeight: '800' },
   depthBox: {
     position: 'absolute',
     top: 176,

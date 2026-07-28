@@ -7,6 +7,7 @@ import {
   stopBackgroundTripTracking,
   takeBackgroundPoints,
 } from '../lib/backgroundTripTracking';
+import { saveTrip, TripCoord } from '../lib/tripHistory';
 
 type TripResult = { duration_hours: number; distance_km: number };
 
@@ -28,6 +29,9 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
   const startTimeRef = useRef<number>(0);
   const lastCoordRef = useRef<{ latitude: number; longitude: number } | null>(null);
   const distanceRef = useRef(0);
+  // full ordered breadcrumb of the route, saved to trip history when the trip
+  // ends so it can be redrawn later on the My Trips detail map.
+  const pathRef = useRef<TripCoord[]>([]);
   const subscriptionRef = useRef<Location.LocationSubscription | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isTrackingRef = useRef(false);
@@ -51,6 +55,7 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
           if (last) {
             distanceRef.current += distanceKm(last, coord);
           }
+          pathRef.current.push(coord); // keep the route continuous across backgrounding
           last = coord;
         }
         lastCoordRef.current = last;
@@ -68,6 +73,7 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
     startTimeRef.current = Date.now();
     lastCoordRef.current = null;
     distanceRef.current = 0;
+    pathRef.current = [];
     setDistance(0);
     setElapsedSeconds(0);
 
@@ -79,6 +85,7 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
           distanceRef.current += distanceKm(lastCoordRef.current, coord);
           setDistance(distanceRef.current);
         }
+        pathRef.current.push(coord);
         lastCoordRef.current = coord;
       }
     );
@@ -100,17 +107,33 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
     if (tickRef.current) clearInterval(tickRef.current);
     tickRef.current = null;
 
-    const duration_hours = (Date.now() - startTimeRef.current) / 1000 / 3600;
+    const endedAt = Date.now();
+    const duration_hours = (endedAt - startTimeRef.current) / 1000 / 3600;
     const distance_km = distanceRef.current;
+    const result = {
+      duration_hours: Math.round(duration_hours * 100) / 100,
+      distance_km: Math.round(distance_km * 100) / 100,
+    };
+
+    // persist the finished trip (route + stats) to local history so it can be
+    // revisited from My Trips. Skip trivial/empty trips (e.g. permission denied
+    // before any fix). Fire-and-forget — storage is local and must not block UI.
+    if (pathRef.current.length >= 2) {
+      saveTrip({
+        started_at: new Date(startTimeRef.current).toISOString(),
+        ended_at: new Date(endedAt).toISOString(),
+        duration_hours: result.duration_hours,
+        distance_km: result.distance_km,
+        path: pathRef.current,
+      }).catch(() => {});
+    }
+    pathRef.current = [];
 
     setIsTracking(false);
     setElapsedSeconds(0);
     setDistance(0);
 
-    return {
-      duration_hours: Math.round(duration_hours * 100) / 100,
-      distance_km: Math.round(distance_km * 100) / 100,
-    };
+    return result;
   }, []);
 
   return (

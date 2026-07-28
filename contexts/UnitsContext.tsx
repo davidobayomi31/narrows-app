@@ -21,16 +21,26 @@ const MS_TO_KN = 1.943844;
 // stays at 0 until the boat is actually moving. 6 km/h ≈ 1.667 m/s.
 const SPEED_FLOOR_MPS = 6 / MS_TO_KMH;
 const STORAGE_KEY = 'narrows.units';
+// sensible starting threshold — ~1.2 m under the hull covers most small
+// recreational boats; the user tunes it to their own draft in Settings.
+const DEFAULT_SHALLOW_ALERT_DEPTH_M = 1.2;
 
 type UnitsContextValue = {
   distanceUnit: DistanceUnit;
   timeUnit: TimeUnit;
   speedUnit: SpeedUnit;
   depthMode: DepthMode;
+  // shallow-water alert: buzz + banner when the depth under the boat drops below
+  // shallowAlertDepthM (metres). Off by default; the user sets a threshold that
+  // suits their boat's draft.
+  shallowAlertEnabled: boolean;
+  shallowAlertDepthM: number;
   setDistanceUnit: (u: DistanceUnit) => void;
   setTimeUnit: (u: TimeUnit) => void;
   setSpeedUnit: (u: SpeedUnit) => void;
   setDepthMode: (m: DepthMode) => void;
+  setShallowAlertEnabled: (v: boolean) => void;
+  setShallowAlertDepthM: (m: number) => void;
   // formatters — pass the raw metric value stored in the DB
   formatDistance: (km: number) => string;
   formatDuration: (hours: number) => string;
@@ -56,6 +66,8 @@ export function UnitsProvider({ children }: { children: ReactNode }) {
   const [timeUnit, setTimeUnitState] = useState<TimeUnit>('hours');
   const [speedUnit, setSpeedUnitState] = useState<SpeedUnit>('kmh');
   const [depthMode, setDepthModeState] = useState<DepthMode>('location');
+  const [shallowAlertEnabled, setShallowAlertEnabledState] = useState(false);
+  const [shallowAlertDepthM, setShallowAlertDepthMState] = useState(DEFAULT_SHALLOW_ALERT_DEPTH_M);
 
   // load saved preference once on startup
   useEffect(() => {
@@ -68,6 +80,8 @@ export function UnitsProvider({ children }: { children: ReactNode }) {
           if (saved.timeUnit) setTimeUnitState(saved.timeUnit);
           if (saved.speedUnit) setSpeedUnitState(saved.speedUnit);
           if (saved.depthMode) setDepthModeState(saved.depthMode);
+          if (typeof saved.shallowAlertEnabled === 'boolean') setShallowAlertEnabledState(saved.shallowAlertEnabled);
+          if (typeof saved.shallowAlertDepthM === 'number') setShallowAlertDepthMState(saved.shallowAlertDepthM);
         }
       } catch {
         // ignore — fall back to defaults
@@ -75,13 +89,26 @@ export function UnitsProvider({ children }: { children: ReactNode }) {
     })();
   }, []);
 
-  async function persist(next: {
+  // one snapshot writer — each setter updates its own field then persists the
+  // whole preferences object (with the just-changed value overridden).
+  async function persist(overrides: Partial<{
     distanceUnit: DistanceUnit;
     timeUnit: TimeUnit;
     speedUnit: SpeedUnit;
     depthMode: DepthMode;
-  }) {
+    shallowAlertEnabled: boolean;
+    shallowAlertDepthM: number;
+  }>) {
     try {
+      const next = {
+        distanceUnit,
+        timeUnit,
+        speedUnit,
+        depthMode,
+        shallowAlertEnabled,
+        shallowAlertDepthM,
+        ...overrides,
+      };
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     } catch {
       // ignore — the in-memory value still updates the UI
@@ -90,22 +117,34 @@ export function UnitsProvider({ children }: { children: ReactNode }) {
 
   function setDistanceUnit(u: DistanceUnit) {
     setDistanceUnitState(u);
-    persist({ distanceUnit: u, timeUnit, speedUnit, depthMode });
+    persist({ distanceUnit: u });
   }
 
   function setTimeUnit(u: TimeUnit) {
     setTimeUnitState(u);
-    persist({ distanceUnit, timeUnit: u, speedUnit, depthMode });
+    persist({ timeUnit: u });
   }
 
   function setSpeedUnit(u: SpeedUnit) {
     setSpeedUnitState(u);
-    persist({ distanceUnit, timeUnit, speedUnit: u, depthMode });
+    persist({ speedUnit: u });
   }
 
   function setDepthMode(m: DepthMode) {
     setDepthModeState(m);
-    persist({ distanceUnit, timeUnit, speedUnit, depthMode: m });
+    persist({ depthMode: m });
+  }
+
+  function setShallowAlertEnabled(v: boolean) {
+    setShallowAlertEnabledState(v);
+    persist({ shallowAlertEnabled: v });
+  }
+
+  // clamp to a sane range so the stepper can't drive it to 0 or absurd depths
+  function setShallowAlertDepthM(m: number) {
+    const clamped = Math.min(15, Math.max(0.5, Math.round(m * 10) / 10));
+    setShallowAlertDepthMState(clamped);
+    persist({ shallowAlertDepthM: clamped });
   }
 
   function distanceValue(km: number) {
@@ -140,10 +179,14 @@ export function UnitsProvider({ children }: { children: ReactNode }) {
     timeUnit,
     speedUnit,
     depthMode,
+    shallowAlertEnabled,
+    shallowAlertDepthM,
     setDistanceUnit,
     setTimeUnit,
     setSpeedUnit,
     setDepthMode,
+    setShallowAlertEnabled,
+    setShallowAlertDepthM,
     formatDistance,
     formatDuration,
     formatSpeed,
