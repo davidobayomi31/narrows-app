@@ -23,6 +23,7 @@ import NotificationsScreen from './screens/NotificationsScreen';
 import PostDetailScreen from './screens/PostDetailScreen';
 import TripsScreen from './screens/TripsScreen';
 import TripDetailScreen from './screens/TripDetailScreen';
+import OfflineMapsScreen from './screens/OfflineMapsScreen';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from './constants/colors';
@@ -170,6 +171,16 @@ export default function App(){
           }}
         />
         <Stack.Screen name='TripDetail' component={TripDetailScreen} />
+        <Stack.Screen
+          name='OfflineMaps'
+          component={OfflineMapsScreen}
+          options={{
+            headerShown: true,
+            title: 'Offline Maps',
+            headerStyle: { backgroundColor: Colors.background },
+            headerTintColor: Colors.cream,
+          }}
+        />
       </Stack.Navigator>
     </NavigationContainer>
     </TripProvider>

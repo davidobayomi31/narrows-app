@@ -243,6 +243,7 @@ export default function SettingsScreen() {
             </View>
           </View>
         )}
+        <Row icon="cloud-offline-outline" label="Offline Maps" onPress={() => navigation.navigate('OfflineMaps')} />
       </View>
 
       <Text style={styles.section}>TRIPS</Text>

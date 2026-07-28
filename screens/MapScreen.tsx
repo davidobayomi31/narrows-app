@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Vibration,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 import MapView, { Marker, LongPressEvent, Callout, WMSTile, UrlTile } from 'react-native-maps';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -26,6 +27,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTrip } from '../contexts/TripContext';
 import { useUnits } from '../contexts/UnitsContext';
 import PostComposer from './components/PostComposer';
+import ConditionsSheet from './components/ConditionsSheet';
+import { getWeather, Weather } from '../lib/weather';
+import { clusterPoints, Region } from '../lib/clustering';
+import { searchPlaces, Place } from '../lib/geocode';
 import {
   BASE_TILE_URL,
   BASE_TILES_ENABLED,
@@ -187,6 +192,30 @@ export default function MapScreen() {
   const [offlineMode, setOfflineMode] = useState(false);
   const [download, setDownload] = useState<DownloadProgress | null>(null);
   const cancelDownloadRef = useRef(false);
+  // live conditions for the drag-up sheet, fetched for the map's area
+  const [weather, setWeather] = useState<Weather | null>(null);
+
+  // clustering: the live region drives how tightly catch pins group together
+  const [region, setRegion] = useState<Region>({
+    latitude: 44.62,
+    longitude: -79.40,
+    latitudeDelta: 0.15,
+    longitudeDelta: 0.15,
+  });
+  const clusters = useMemo(() => clusterPoints(pins, region), [pins, region]);
+
+  // search: local marina matches (instant, offline) + geocoded places (online)
+  const [showSearch, setShowSearch] = useState(false);
+  const [query, setQuery] = useState('');
+  const [placeResults, setPlaceResults] = useState<Place[]>([]);
+  const placeSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const marinaResults = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    return marinas
+      .filter((m) => m.latitude != null && m.longitude != null && m.name.toLowerCase().includes(q))
+      .slice(0, 5);
+  }, [query, marinas]);
 
   // trip composer state — opens once a trip ends, pre-filled with tracked stats
   const [showTripComposer, setShowTripComposer] = useState(false);
@@ -205,7 +234,75 @@ export default function MapScreen() {
     loadMarinas();
     // getSession() is local (no network) so we still know the user offline
     supabase.auth.getSession().then(({ data }) => setUserId(data.session?.user?.id ?? null));
+    AsyncStorage.getItem('narrows.offlineMode').then((v) => setOfflineMode(v === '1'));
+    // conditions for the map's area (getWeather caches, so this is cheap)
+    getWeather(regionRef.current.latitude, regionRef.current.longitude).then(setWeather);
   }, []);
+
+  function toggleOffline() {
+    setOfflineMode((v) => {
+      const next = !v;
+      AsyncStorage.setItem('narrows.offlineMode', next ? '1' : '0').catch(() => {});
+      return next;
+    });
+  }
+
+  // Download every tile covering the currently-visible map area (base + depth)
+  // for offline use. Confirms the tile count first, shows live progress, and can
+  // be cancelled mid-download.
+  async function handleDownloadArea() {
+    if (!BASE_TILES_ENABLED) {
+      Alert.alert('Offline maps unavailable', 'No offline map provider is configured yet.');
+      return;
+    }
+    const bounds = await mapRef.current?.getMapBoundaries();
+    if (!bounds) return;
+
+    const count = estimateTileCount(bounds, OFFLINE_MIN_ZOOM, OFFLINE_MAX_ZOOM);
+    if (count > OFFLINE_MAX_TILES) {
+      Alert.alert(
+        'Area too large',
+        `This area needs ~${count.toLocaleString()} tiles (limit ${OFFLINE_MAX_TILES.toLocaleString()}). Zoom in and try a smaller area.`
+      );
+      return;
+    }
+
+    Alert.alert(
+      'Download this area?',
+      `Saves ~${count.toLocaleString()} map tiles for offline use, including depth shading.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Download',
+          onPress: async () => {
+            cancelDownloadRef.current = false;
+            setDownload({ done: 0, total: count, failed: 0 });
+            const result = await downloadRegion(bounds, {
+              minZ: OFFLINE_MIN_ZOOM,
+              maxZ: OFFLINE_MAX_ZOOM,
+              onProgress: setDownload,
+              shouldCancel: () => cancelDownloadRef.current,
+            });
+            setDownload(null);
+            if (result.cancelled) return;
+            await addRegion({
+              name: 'Saved area',
+              bounds,
+              minZ: OFFLINE_MIN_ZOOM,
+              maxZ: OFFLINE_MAX_ZOOM,
+              tiles: result.done - result.failed,
+            });
+            Alert.alert(
+              'Area saved',
+              result.failed > 0
+                ? `Saved with ${result.failed.toLocaleString()} tiles unavailable. The rest works offline.`
+                : 'This area now works offline. Manage saved maps in Settings → Offline Maps.'
+            );
+          },
+        },
+      ]
+    );
+  }
 
   // keep the alert refs live for the long-lived GPS watcher; clearing the
   // banner when the feature (or 'map' depth mode, where depth isn't under the
@@ -462,11 +559,49 @@ export default function MapScreen() {
     ]);
   }
 
+  // tapping a cluster zooms in so its pins spread apart
+  function zoomToCluster(latitude: number, longitude: number) {
+    mapRef.current?.animateToRegion(
+      {
+        latitude,
+        longitude,
+        latitudeDelta: Math.max(region.latitudeDelta / 2.5, 0.004),
+        longitudeDelta: Math.max(region.longitudeDelta / 2.5, 0.004),
+      },
+      350
+    );
+  }
+
+  // debounced place lookup as the user types (marina matches are instant/local)
+  function onQueryChange(text: string) {
+    setQuery(text);
+    if (placeSearchTimer.current) clearTimeout(placeSearchTimer.current);
+    if (text.trim().length < 2) {
+      setPlaceResults([]);
+      return;
+    }
+    placeSearchTimer.current = setTimeout(async () => {
+      setPlaceResults(await searchPlaces(text));
+    }, 350);
+  }
+
+  function goToLocation(latitude: number, longitude: number) {
+    mapRef.current?.animateToRegion({ latitude, longitude, latitudeDelta: 0.05, longitudeDelta: 0.05 }, 400);
+    closeSearch();
+  }
+
+  function closeSearch() {
+    setShowSearch(false);
+    setQuery('');
+    setPlaceResults([]);
+  }
+
   return (
     <View style={styles.container}>
       <MapView
+        ref={mapRef}
         style={styles.map}
-        userInterfaceStyle="dark" 
+        userInterfaceStyle="dark"
         mapType={mapType}
         showsUserLocation={hasLocationPerm}
         showsMyLocationButton
@@ -479,13 +614,40 @@ export default function MapScreen() {
         onLongPress={handleLongPress}
         onRegionChangeComplete={(r) => {
           regionRef.current = { latitude: r.latitude, longitude: r.longitude };
+          setRegion(r);
           if (depthMode === 'map') queryDepthAt(r.latitude, r.longitude);
         }}
       >
+        {/* MapTiler base raster — only while offline mode is on. Online, we leave
+            the native Apple/Google base map alone (no MapTiler quota used, no
+            change to the online look). shouldReplaceMapContent swaps in the cached
+            raster for the native base (which can't be served offline); offlineMode
+            makes it serve cache-only. Populate the cache with "download this area"
+            while online. */}
+        {BASE_TILES_ENABLED && offlineMode && (
+          <UrlTile
+            urlTemplate={BASE_TILE_URL}
+            tileCachePath={BASE_TILE_CACHE}
+            offlineMode
+            shouldReplaceMapContent
+            maximumZ={OFFLINE_MAX_ZOOM}
+            zIndex={-2}
+          />
+        )}
+
         {/* depth-shading layer — rendered under all markers via the county's
-            dynamic export endpoint, one bbox request per tile */}
+            dynamic export endpoint, one bbox request per tile. tileCachePath makes
+            displayed tiles cache to disk (and prefetch land here); offlineMode
+            serves them with no network. */}
         {showDepthLayer && (
-          <WMSTile urlTemplate={DEPTH_EXPORT} opacity={0.55} tileSize={256} zIndex={-1} />
+          <WMSTile
+            urlTemplate={DEPTH_EXPORT}
+            opacity={0.55}
+            tileSize={256}
+            zIndex={-1}
+            tileCachePath={DEPTH_TILE_CACHE}
+            offlineMode={offlineMode}
+          />
         )}
 
         {marinas
@@ -508,25 +670,43 @@ export default function MapScreen() {
             </Marker>
           ))}
 
-        {pins.map((pin) => (
-          <Marker
-            key={pin.id}
-            coordinate={{ latitude: pin.latitude, longitude: pin.longitude }}
-            pinColor={Colors.gold}
-            onCalloutPress={() => confirmDeletePin(pin)}
-          >
-            <Callout>
-              <View style={styles.callout}>
-                <Text style={styles.calloutTitle}>{pin.species || 'Catch'}</Text>
-                <Text style={styles.calloutMeta}>
-                  by {pin.author?.first_name || 'Boater'} {pin.author?.last_name || ''} · {timeAgo(pin.created_at)}
-                </Text>
-                {pin.notes ? <Text style={styles.calloutNotes}>{pin.notes}</Text> : null}
-                {pin.user_id === userId ? <Text style={styles.calloutDelete}>Tap to delete</Text> : null}
-              </View>
-            </Callout>
-          </Marker>
-        ))}
+        {clusters.map((c) => {
+          // more than one pin in this cell → a numbered cluster bubble that
+          // zooms in on tap; a single pin → the normal catch-pin marker.
+          if (c.count > 1) {
+            return (
+              <Marker
+                key={c.id}
+                coordinate={{ latitude: c.latitude, longitude: c.longitude }}
+                onPress={() => zoomToCluster(c.latitude, c.longitude)}
+              >
+                <View style={styles.clusterBubble}>
+                  <Text style={styles.clusterText}>{c.count}</Text>
+                </View>
+              </Marker>
+            );
+          }
+          const pin = c.items[0];
+          return (
+            <Marker
+              key={pin.id}
+              coordinate={{ latitude: pin.latitude, longitude: pin.longitude }}
+              pinColor={Colors.gold}
+              onCalloutPress={() => confirmDeletePin(pin)}
+            >
+              <Callout>
+                <View style={styles.callout}>
+                  <Text style={styles.calloutTitle}>{pin.species || 'Catch'}</Text>
+                  <Text style={styles.calloutMeta}>
+                    by {pin.author?.first_name || 'Boater'} {pin.author?.last_name || ''} · {timeAgo(pin.created_at)}
+                  </Text>
+                  {pin.notes ? <Text style={styles.calloutNotes}>{pin.notes}</Text> : null}
+                  {pin.user_id === userId ? <Text style={styles.calloutDelete}>Tap to delete</Text> : null}
+                </View>
+              </Callout>
+            </Marker>
+          );
+        })}
       </MapView>
 
       {/* depth-layer toggle — top-left, away from the right-hand readout column */}
@@ -540,6 +720,65 @@ export default function MapScreen() {
           color={showDepthLayer ? '#4FB0E0' : Colors.cream}
         />
       </TouchableOpacity>
+
+      {/* offline mode toggle — serve tiles from the on-device cache only */}
+      {BASE_TILES_ENABLED && (
+        <TouchableOpacity style={styles.offlineToggleBtn} onPress={toggleOffline}>
+          <Ionicons
+            name={offlineMode ? 'cloud-offline' : 'cloud-offline-outline'}
+            size={20}
+            color={offlineMode ? Colors.gold : Colors.cream}
+          />
+        </TouchableOpacity>
+      )}
+
+      {/* download the visible area for offline use */}
+      {BASE_TILES_ENABLED && (
+        <TouchableOpacity
+          style={styles.downloadAreaBtn}
+          onPress={handleDownloadArea}
+          disabled={download != null}
+        >
+          <Ionicons name="download-outline" size={20} color={Colors.cream} />
+        </TouchableOpacity>
+      )}
+
+      {/* offline-mode banner + base-map attribution while the raster base is up */}
+      {BASE_TILES_ENABLED && offlineMode && (
+        <View style={styles.offlineBadge} pointerEvents="none">
+          <Ionicons name="cloud-offline" size={13} color={Colors.gold} />
+          <Text style={styles.offlineBadgeText}>Offline · {BASE_TILE_ATTRIBUTION}</Text>
+        </View>
+      )}
+
+      {/* download progress overlay */}
+      {download != null && (
+        <View style={styles.downloadOverlay}>
+          <View style={styles.downloadCard}>
+            <ActivityIndicator color={Colors.gold} />
+            <Text style={styles.downloadTitle}>Saving map area…</Text>
+            <Text style={styles.downloadMeta}>
+              {download.done.toLocaleString()} / {download.total.toLocaleString()} tiles
+            </Text>
+            <View style={styles.progressTrack}>
+              <View
+                style={[
+                  styles.progressFill,
+                  { width: `${download.total ? Math.round((download.done / download.total) * 100) : 0}%` },
+                ]}
+              />
+            </View>
+            <TouchableOpacity
+              style={styles.downloadCancel}
+              onPress={() => {
+                cancelDownloadRef.current = true;
+              }}
+            >
+              <Text style={styles.downloadCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       {/* shallow-water warning — prominent bar, safety-relevant */}
       {shallowWarning && depthM != null && (
@@ -615,6 +854,9 @@ export default function MapScreen() {
           <Text style={styles.speedCaption}>SPEED</Text>
         </View>
       )}
+
+      {/* live conditions — drag-up bottom sheet */}
+      <ConditionsSheet weather={weather} />
 
       {/* new-pin composer */}
       <Modal
@@ -780,6 +1022,66 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 10,
   },
+  offlineToggleBtn: {
+    position: 'absolute',
+    top: 112,
+    left: 16,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 20,
+    padding: 10,
+  },
+  downloadAreaBtn: {
+    position: 'absolute',
+    top: 164,
+    left: 16,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 20,
+    padding: 10,
+  },
+  offlineBadge: {
+    position: 'absolute',
+    bottom: 190,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    maxWidth: '88%',
+  },
+  offlineBadgeText: { color: Colors.cream, fontSize: 11, fontWeight: '600' },
+  downloadOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  downloadCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 18,
+    padding: 22,
+    width: '78%',
+    alignItems: 'center',
+    gap: 10,
+  },
+  downloadTitle: { color: Colors.cream, fontSize: 16, fontWeight: '700' },
+  downloadMeta: { color: Colors.muted, fontSize: 13 },
+  progressTrack: {
+    width: '100%',
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.surfaceAlt,
+    overflow: 'hidden',
+  },
+  progressFill: { height: 6, borderRadius: 3, backgroundColor: Colors.gold },
+  downloadCancel: { paddingVertical: 8, paddingHorizontal: 20, marginTop: 2 },
+  downloadCancelText: { color: Colors.muted, fontSize: 14, fontWeight: '600' },
   shallowBanner: {
     position: 'absolute',
     top: 110,

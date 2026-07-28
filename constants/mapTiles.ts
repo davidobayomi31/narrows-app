@@ -6,28 +6,42 @@
 // react-native-maps, which is why offline mode renders this raster layer instead
 // (via <UrlTile shouldReplaceMapContent>).
 //
-// ⚠️ PROVIDER / TERMS OF SERVICE
-// The default below is OpenStreetMap's public tile server. It is fine for light
-// development testing, but its usage policy FORBIDS bulk downloading — do not
-// ship region prefetch against it. Before release, switch BASE_TILE_URL to a
-// provider whose plan permits offline/caching and hand back an {z}/{x}/{y} raster
-// URL with an API key (MapTiler, Stadia Maps, and Thunderforest all have free
-// tiers). Update BASE_TILE_ATTRIBUTION to match whatever you choose.
-export const BASE_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+// Provider: MapTiler (its plan permits offline caching, unlike OSM's public
+// server). To finish setup:
+//   1. Create a free key at https://cloud.maptiler.com/account/keys/
+//   2. Paste it into MAPTILER_KEY below.
+//   3. (Recommended) In MapTiler → your key → restrict it to this app's bundle
+//      id (site.narrows.app) so the key can't be abused elsewhere.
+// Until a key is set, BASE_TILE_URL falls back to OpenStreetMap for DEV TESTING
+// ONLY — OSM's usage policy forbids bulk downloading, so never ship on it.
+export const MAPTILER_KEY = 'jzXHqJHLVGiZXw1REBsY'; // MapTiler client key (bundled in-app; see notes on restriction)
 
-// Whether the offline base raster layer is active. Kept as its own flag so the
-// map falls back cleanly to Apple/Google online tiles until a shippable provider
-// is configured above.
-export const BASE_TILES_ENABLED = true;
+// Raster base style. 'ocean' is marine-oriented (depth tints, seamarks) and fits
+// boating best; 'outdoor-v2' and 'topo-v2' are good alternatives. All are served
+// as {z}/{x}/{y}.png raster by MapTiler.
+const MAPTILER_STYLE = 'ocean';
 
-// Sent on every tile request. OSM (and most providers) require a descriptive
+export const BASE_TILE_URL = MAPTILER_KEY
+  ? `https://api.maptiler.com/maps/${MAPTILER_STYLE}/{z}/{x}/{y}.png?key=${MAPTILER_KEY}`
+  : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'; // DEV fallback — do not ship
+
+// The offline base raster layer only turns on once a real provider key is set,
+// so we never ship region prefetch against OSM by accident. Flip to `true` to
+// force-enable the OSM fallback for local testing.
+export const BASE_TILES_ENABLED = MAPTILER_KEY.length > 0;
+
+// Sent on every tile request. OSM (and most providers) want a descriptive
 // User-Agent identifying the app; requests with a generic RN user-agent may be
 // throttled or blocked.
 export const TILE_REQUEST_HEADERS: Record<string, string> = {
   'User-Agent': 'NarrowsApp/1.0 (+https://narrows.site)',
 };
 
-export const BASE_TILE_ATTRIBUTION = '© OpenStreetMap contributors';
+// MapTiler's terms require this attribution wherever their tiles are shown (we
+// display it in the offline badge). Falls back to OSM's when no key is set.
+export const BASE_TILE_ATTRIBUTION = MAPTILER_KEY
+  ? '© MapTiler © OpenStreetMap contributors'
+  : '© OpenStreetMap contributors';
 
 // Zoom range prefetched for a downloaded region. The low bound frames the whole
 // lake; the high bound is close-in detail. Each extra zoom level is ~4× the
