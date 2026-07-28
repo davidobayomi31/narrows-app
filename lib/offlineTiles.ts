@@ -7,8 +7,8 @@ import {
   OFFLINE_MAX_TILES,
 } from '../constants/mapTiles';
 
-// Offline tile engine. Downloads base + depth raster tiles for a bounding box
-// into the exact on-disk layout react-native-maps expects for tileCachePath —
+// Offline tile engine. Downloads base raster tiles for a bounding box into the
+// exact on-disk layout react-native-maps expects for tileCachePath —
 // `{cache}/{z}/{x}/{y}` (bare filename, no extension) — so that with
 // offlineMode={true} the map serves them with no network. Verified against the
 // installed react-native-maps native cache reader (iOS + Android).
@@ -17,41 +17,22 @@ export type LatLng = { latitude: number; longitude: number };
 export type Bounds = { northEast: LatLng; southWest: LatLng };
 
 // documentDirectory is safe from OS eviction (unlike the cache dir), so saved
-// maps survive until the user deletes them. These same strings are handed to
-// <UrlTile tileCachePath> / <WMSTile tileCachePath>.
+// maps survive until the user deletes them. This same string is handed to
+// <UrlTile tileCachePath>.
 const ROOT = `${FS.documentDirectory}narrows-tiles`;
 export const BASE_TILE_CACHE = `${ROOT}/base`;
-export const DEPTH_TILE_CACHE = `${ROOT}/depth`;
-
-// depth export endpoint, kept in sync with MapScreen's DEPTH_EXPORT — prefetched
-// by bbox so cached depth tiles land on the same keys the live WMSTile requests.
-const DEPTH_EXPORT_BASE =
-  'https://maps.simcoe.ca/arcgis/rest/services/Public/Bathymetry_Cache/MapServer/export';
 
 // how many tiles to fetch at once — enough to be quick, gentle enough not to
-// hammer the tile servers (each tile is a base + a depth request).
+// hammer the tile server.
 const CONCURRENCY = 6;
 
 // --- web-mercator (EPSG:3857 / standard XYZ) tile math ---
-const WORLD = 20037508.34789244; // half-extent of web mercator, in metres
-
 function lngToTileX(lng: number, z: number) {
   return Math.floor(((lng + 180) / 360) * 2 ** z);
 }
 function latToTileY(lat: number, z: number) {
   const r = (lat * Math.PI) / 180;
   return Math.floor(((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * 2 ** z);
-}
-// bbox of a tile in EPSG:3857 metres — mirrors <WMSTile>'s own tile→bbox math so
-// a prefetched depth tile matches the exact request the map will make.
-function tileBBox3857(x: number, y: number, z: number) {
-  const tile = (WORLD * 2) / 2 ** z;
-  return {
-    minX: -WORLD + x * tile,
-    minY: WORLD - (y + 1) * tile,
-    maxX: -WORLD + (x + 1) * tile,
-    maxY: WORLD - y * tile,
-  };
 }
 
 type TileRange = { xMin: number; xMax: number; yMin: number; yMax: number };
@@ -104,13 +85,6 @@ async function downloadTile(url: string, destUri: string): Promise<boolean> {
 function baseTileUrl(z: number, x: number, y: number) {
   return BASE_TILE_URL.replace('{z}', String(z)).replace('{x}', String(x)).replace('{y}', String(y));
 }
-function depthTileUrl(z: number, x: number, y: number) {
-  const b = tileBBox3857(x, y, z);
-  return (
-    `${DEPTH_EXPORT_BASE}?bbox=${b.minX},${b.minY},${b.maxX},${b.maxY}` +
-    `&bboxSR=3857&imageSR=3857&size=256,256&dpi=96&format=png32&transparent=true&f=image`
-  );
-}
 
 export type DownloadProgress = { done: number; total: number; failed: number };
 export type DownloadResult = DownloadProgress & { cancelled: boolean };
@@ -118,16 +92,14 @@ export type DownloadResult = DownloadProgress & { cancelled: boolean };
 export type DownloadOptions = {
   minZ: number;
   maxZ: number;
-  includeDepth?: boolean; // also cache the depth layer (default true)
   onProgress?: (p: DownloadProgress) => void;
   shouldCancel?: () => boolean;
 };
 
-// Downloads every tile covering `bounds` across the zoom range. Base tiles are
-// required; depth tiles are best-effort (a missing depth tile shouldn't fail the
-// region). Runs a small worker pool, reports progress, and can be cancelled.
+// Downloads every base-map tile covering `bounds` across the zoom range. Runs a
+// small worker pool, reports progress, and can be cancelled.
 export async function downloadRegion(bounds: Bounds, opts: DownloadOptions): Promise<DownloadResult> {
-  const { minZ, maxZ, includeDepth = true } = opts;
+  const { minZ, maxZ } = opts;
 
   // flatten every (z,x,y) into one task list so the worker pool can drain it
   const tiles: { z: number; x: number; y: number }[] = [];
@@ -144,7 +116,6 @@ export async function downloadRegion(bounds: Bounds, opts: DownloadOptions): Pro
   // on mkdir.
   for (const col of columns) {
     await ensureDir(`${BASE_TILE_CACHE}/${col}`);
-    if (includeDepth) await ensureDir(`${DEPTH_TILE_CACHE}/${col}`);
   }
 
   const total = tiles.length;
@@ -163,9 +134,6 @@ export async function downloadRegion(bounds: Bounds, opts: DownloadOptions): Pro
       if (i >= tiles.length) return;
       const { z, x, y } = tiles[i];
       const okBase = await downloadTile(baseTileUrl(z, x, y), `${BASE_TILE_CACHE}/${z}/${x}/${y}`);
-      if (includeDepth) {
-        await downloadTile(depthTileUrl(z, x, y), `${DEPTH_TILE_CACHE}/${z}/${x}/${y}`);
-      }
       if (!okBase) failed++;
       done++;
       opts.onProgress?.({ done, total, failed });
@@ -226,7 +194,7 @@ export async function removeRegion(id: string): Promise<void> {
   }
 }
 
-// total bytes used by all cached tiles (base + depth), via the new FS API which
+// total bytes used by all cached base-map tiles, via the new FS API which
 // sums directory sizes recursively.
 export async function getCacheSizeBytes(): Promise<number> {
   try {

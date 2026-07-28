@@ -177,8 +177,9 @@ export default function MapScreen() {
   const [offlineMode, setOfflineMode] = useState(false);
   const [download, setDownload] = useState<DownloadProgress | null>(null);
   const cancelDownloadRef = useRef(false);
-  // live conditions for the drag-up sheet, fetched for the map's area
+  // live conditions panel (opened by the top-left conditions icon)
   const [weather, setWeather] = useState<Weather | null>(null);
+  const [showConditions, setShowConditions] = useState(false);
 
   // clustering: the live region drives how tightly catch pins group together
   const [region, setRegion] = useState<Region>({
@@ -265,7 +266,6 @@ export default function MapScreen() {
             const result = await downloadRegion(bounds, {
               minZ: OFFLINE_MIN_ZOOM,
               maxZ: OFFLINE_MAX_ZOOM,
-              includeDepth: false, // depth shading layer removed — base tiles only
               onProgress: setDownload,
               shouldCancel: () => cancelDownloadRef.current,
             });
@@ -708,6 +708,18 @@ export default function MapScreen() {
         </TouchableOpacity>
       )}
 
+      {/* live conditions — opens the panel (button, no edge-gesture conflict) */}
+      <TouchableOpacity
+        style={styles.conditionsBtn}
+        onPress={() => setShowConditions((v) => !v)}
+      >
+        <Ionicons
+          name={showConditions ? 'partly-sunny' : 'partly-sunny-outline'}
+          size={20}
+          color={showConditions ? Colors.gold : Colors.cream}
+        />
+      </TouchableOpacity>
+
       {/* offline-mode banner + base-map attribution while the raster base is up */}
       {BASE_TILES_ENABLED && offlineMode && (
         <View style={styles.offlineBadge} pointerEvents="none">
@@ -864,8 +876,12 @@ export default function MapScreen() {
         </View>
       )}
 
-      {/* live conditions — drag-up bottom sheet */}
-      <ConditionsSheet weather={weather} />
+      {/* live conditions — icon-opened panel above the tab bar, drag down to close */}
+      <ConditionsSheet
+        visible={showConditions}
+        onClose={() => setShowConditions(false)}
+        weather={weather}
+      />
 
       {/* new-pin composer */}
       <Modal
@@ -1094,6 +1110,14 @@ const styles = StyleSheet.create({
   downloadAreaBtn: {
     position: 'absolute',
     top: 112,
+    left: 16,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 20,
+    padding: 10,
+  },
+  conditionsBtn: {
+    position: 'absolute',
+    top: 164,
     left: 16,
     backgroundColor: 'rgba(0,0,0,0.6)',
     borderRadius: 20,

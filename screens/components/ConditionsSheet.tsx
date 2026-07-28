@@ -5,93 +5,72 @@ import { Colors } from '../../constants/colors';
 import { Weather } from '../../lib/weather';
 import WindCompass from './WindCompass';
 
-// Live-conditions bottom sheet for the map. A small handle sits at the bottom;
-// drag it up (or tap) to reveal wind + weather detail, drag down to dismiss.
-// Built on core Animated + PanResponder so it needs no gesture-handler dep.
-// Deliberately a BOTTOM sheet — a left-edge drawer would fight iOS back-swipe.
+// Live-conditions panel for the map. Opened by the top-left conditions icon;
+// slides up ABOVE the floating tab-bar pill (which sits ~90px off the bottom).
+// Drag DOWN on the panel to dismiss — the drag starts on the sheet itself, not a
+// screen edge, so it never fights iOS's home/back edge gestures.
 
-const PEEK = 92; // height visible while collapsed (handle + quick summary)
-const SHEET_HEIGHT = Math.min(430, Dimensions.get('window').height * 0.6);
-const HIDDEN_OFFSET = SHEET_HEIGHT - PEEK; // translateY when collapsed
+const SHEET_HEIGHT = Math.min(390, Dimensions.get('window').height * 0.54);
+const TABBAR_CLEARANCE = 100; // sit above the floating tab pill (top ≈ 90px up)
+const CLOSED = SHEET_HEIGHT + 140; // translateY that parks it fully off-screen
+
+const CARDINALS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+function cardinal(deg: number) {
+  return CARDINALS[Math.round(deg / 22.5) % 16];
+}
 
 type Props = {
+  visible: boolean;
+  onClose: () => void;
   weather: Weather | null;
 };
 
-export default function ConditionsSheet({ weather }: Props) {
-  // translateY: 0 = fully open, HIDDEN_OFFSET = collapsed to the peek
-  const translateY = useRef(new Animated.Value(HIDDEN_OFFSET)).current;
-  const currentY = useRef(HIDDEN_OFFSET);
-  const dragStartY = useRef(HIDDEN_OFFSET);
+export default function ConditionsSheet({ visible, onClose, weather }: Props) {
+  const translateY = useRef(new Animated.Value(CLOSED)).current;
 
-  // keep a JS mirror of the animated value so a drag starts from where it is
   useEffect(() => {
-    const id = translateY.addListener(({ value }) => {
-      currentY.current = value;
-    });
-    return () => translateY.removeListener(id);
-  }, [translateY]);
-
-  function snapTo(open: boolean) {
     Animated.spring(translateY, {
-      toValue: open ? 0 : HIDDEN_OFFSET,
+      toValue: visible ? 0 : CLOSED,
       useNativeDriver: true,
       bounciness: 4,
     }).start();
-  }
+  }, [visible, translateY]);
 
   const panResponder = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dy) > 4,
-      onPanResponderGrant: () => {
-        dragStartY.current = currentY.current;
-      },
-      onPanResponderMove: (_e, g) => {
-        const next = Math.min(HIDDEN_OFFSET, Math.max(0, dragStartY.current + g.dy));
-        translateY.setValue(next);
-      },
+      onMoveShouldSetPanResponder: (_e, g) => g.dy > 4 && Math.abs(g.dy) > Math.abs(g.dx),
+      onPanResponderMove: (_e, g) => translateY.setValue(Math.max(0, g.dy)),
       onPanResponderRelease: (_e, g) => {
-        // decide by velocity first, then by which snap point is nearer
-        if (g.vy < -0.5) return snapTo(true);
-        if (g.vy > 0.5) return snapTo(false);
-        snapTo(currentY.current < HIDDEN_OFFSET / 2);
+        if (g.dy > 90 || g.vy > 0.5) onClose();
+        else Animated.spring(translateY, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
       },
     })
   ).current;
 
-  const summary = weather
-    ? `${weather.temp}°C · Wind ${weather.windSpeed} km/h`
-    : 'Conditions unavailable';
-
   return (
     <Animated.View style={[styles.sheet, { transform: [{ translateY }] }]}>
-      {/* grab handle + collapsed summary — the drag target */}
+      {/* grab handle + title — the drag-down-to-close target */}
       <View {...panResponder.panHandlers}>
-        <TouchableOpacity activeOpacity={0.9} onPress={() => snapTo(currentY.current > HIDDEN_OFFSET / 2)}>
-          <View style={styles.grip} />
-          <View style={styles.peekRow}>
-            <MaterialCommunityIcons name="weather-partly-cloudy" size={20} color={Colors.gold} />
-            <Text style={styles.peekText}>{summary}</Text>
-            <Ionicons name="chevron-up" size={18} color={Colors.muted} />
-          </View>
-        </TouchableOpacity>
+        <View style={styles.grip} />
+        <View style={styles.header}>
+          <Text style={styles.title}>Conditions</Text>
+          <TouchableOpacity onPress={onClose} hitSlop={12} style={styles.closeBtn}>
+            <Ionicons name="chevron-down" size={20} color={Colors.cream} />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* expanded detail */}
       {weather ? (
         <View style={styles.body}>
           <View style={styles.compassWrap}>
             <WindCompass windSpeed={weather.windSpeed} windDirection={weather.windDirection} />
-            <Text style={styles.compassCaption}>Wind km/h</Text>
+            <Text style={styles.compassCaption}>From {cardinal(weather.windDirection)}</Text>
           </View>
 
-          <View style={styles.grid}>
-            <Stat icon="thermometer" label="Feels like" value={`${weather.feelsLike}°`} />
-            <Stat icon="weather-windy" label="Gust" value={`${weather.windGust}`} />
-            <Stat icon="water-percent" label="Humidity" value={`${weather.humidity}%`} />
-            <Stat icon="weather-rainy" label="Precip" value={`${weather.precipitation} mm`} />
-            <Stat icon="weather-sunny" label="UV" value={`${weather.uvIndex}`} />
-            <Stat icon="white-balance-sunny" label="Sun" value={`${weather.sunrise}`} />
+          <View style={styles.cardRow}>
+            <StatCard icon="thermometer" label="Feels like" value={`${weather.feelsLike}°`} />
+            <StatCard icon="weather-windy" label="Gust" value={`${weather.windGust}`} unit="km/h" />
+            <StatCard icon="weather-pouring" label="Precip" value={`${weather.precipitation}`} unit="mm" />
           </View>
         </View>
       ) : (
@@ -105,12 +84,17 @@ export default function ConditionsSheet({ weather }: Props) {
   );
 }
 
-function Stat({ icon, label, value }: { icon: any; label: string; value: string }) {
+function StatCard({ icon, label, value, unit }: { icon: any; label: string; value: string; unit?: string }) {
   return (
-    <View style={styles.stat}>
-      <MaterialCommunityIcons name={icon} size={18} color={Colors.gold} />
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
+    <View style={styles.card}>
+      <View style={styles.cardIcon}>
+        <MaterialCommunityIcons name={icon} size={18} color={Colors.gold} />
+      </View>
+      <Text style={styles.cardValue}>
+        {value}
+        {unit ? <Text style={styles.cardUnit}> {unit}</Text> : null}
+      </Text>
+      <Text style={styles.cardLabel}>{label}</Text>
     </View>
   );
 }
@@ -120,17 +104,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: 0,
+    bottom: TABBAR_CLEARANCE,
     height: SHEET_HEIGHT,
     backgroundColor: Colors.surface,
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
     paddingHorizontal: 18,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 12,
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 14,
   },
   grip: {
     alignSelf: 'center',
@@ -138,31 +122,55 @@ const styles = StyleSheet.create({
     height: 5,
     borderRadius: 3,
     backgroundColor: Colors.surfaceAlt,
-    marginTop: 8,
+    marginTop: 10,
     marginBottom: 8,
   },
-  peekRow: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingBottom: 10,
-  },
-  peekText: { flex: 1, color: Colors.cream, fontSize: 15, fontWeight: '700' },
-  body: { paddingTop: 6 },
-  compassWrap: { alignItems: 'center', marginBottom: 16 },
-  compassCaption: { color: Colors.muted, fontSize: 11, fontWeight: '700', letterSpacing: 1, marginTop: 6 },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     justifyContent: 'space-between',
-    rowGap: 14,
+    paddingBottom: 6,
   },
-  stat: {
-    width: '30%',
+  title: { color: Colors.cream, fontSize: 20, fontWeight: '800', letterSpacing: 0.2 },
+  closeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.surfaceAlt,
     alignItems: 'center',
-    gap: 3,
+    justifyContent: 'center',
   },
-  statValue: { color: Colors.cream, fontSize: 17, fontWeight: '800' },
-  statLabel: { color: Colors.muted, fontSize: 11, fontWeight: '600' },
+  body: { paddingTop: 2 },
+  compassWrap: { alignItems: 'center', marginBottom: 18 },
+  compassCaption: {
+    color: Colors.cream,
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    marginTop: 8,
+  },
+  cardRow: { flexDirection: 'row', gap: 10 },
+  card: {
+    flex: 1,
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  cardIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(194,162,78,0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardValue: { color: Colors.cream, fontSize: 20, fontWeight: '800' },
+  cardUnit: { color: Colors.muted, fontSize: 12, fontWeight: '600' },
+  cardLabel: { color: Colors.muted, fontSize: 12, fontWeight: '600' },
   unavailable: { color: Colors.muted, fontSize: 14, textAlign: 'center', paddingVertical: 20, lineHeight: 20 },
 });

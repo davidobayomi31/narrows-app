@@ -39,16 +39,20 @@ Goal isn't "beat Wavve everywhere" — it's "make Wavve pointless for a Simcoe C
 | 2 | Draft-aware shallow-water alert (buzz + banner) | ✅ built (kept) |
 | 3 | Trip track recording + "My Trips" (route line, post to feed, share) | ✅ built |
 | 4 | Offline maps (download areas; base + depth work with no signal) | ✅ built |
-| 5 | Live conditions on the map as a drag-up **bottom sheet** | ✅ built (`screens/components/ConditionsSheet.tsx`) |
+| 5 | Live conditions on the map — **icon-opened panel** | ✅ built (`screens/components/ConditionsSheet.tsx`) |
 | 6 | Marker **clustering** + **place/marina search** | ✅ built (`lib/clustering.ts`, `lib/geocode.ts`) |
 
 Notes:
-- #5 is a **bottom sheet** (NOT a left-edge drawer — conflicts with iOS back-swipe), built on core
-  `Animated` + `PanResponder` (no gesture-handler dep). Reuses `lib/weather.ts` + `WindCompass`.
-  Shows wind/gust/direction, temp/feels-like, precip, humidity, UV, sunrise. **No wave height** —
-  Open-Meteo's marine API doesn't cover inland lakes; revisit if an inland wave source appears.
-- Known nit: when expanded, the sheet overlaps the Start Trip button / depth readout (collapse to
-  interact). Fine for MVP; could add a scrim or shift controls later.
+- #5 is opened by the **top-left conditions icon** (`partly-sunny`), slides up ABOVE the floating
+  tab-bar pill (which sits ~90px off the bottom; `TABBAR_CLEARANCE=100`), and closes by dragging DOWN
+  on the sheet or tapping the chevron. Built on core `Animated` + `PanResponder` (no gesture-handler
+  dep). Reuses `lib/weather.ts` + `WindCompass`. Redesigned 2026-07-28 into **card-style stats**
+  (icon chip + value + label) — trimmed to **Feels like, Gust, Precip only** (dropped humidity/UV/
+  sunrise per user — less important to a boater). Compass caption shows wind cardinal direction
+  (e.g. "From NW"). **No wave height** — Open-Meteo's marine API doesn't cover inland lakes.
+- UX rule learned: **don't open panels from a screen edge/corner** — bottom edge = iOS home gesture,
+  left edge = back gesture. The earlier always-visible bottom-sheet peek was hidden behind the tab
+  pill; switched to icon-open. Drag-to-close is fine because the drag starts ON the sheet, not an edge.
 - #6 clustering is **dependency-free** (`lib/clustering.ts` grid clusterer keyed off the visible
   region) — no native lib, no rebuild. Only catch pins cluster; marinas stay individual. Tap a
   numbered bubble to zoom in. Search (`lib/geocode.ts`) = local marina filter + Open-Meteo place
@@ -63,9 +67,11 @@ Notes:
 - Source: **Simcoe County bathymetry**, ArcGIS cached MapServer:
   `https://maps.simcoe.ca/arcgis/rest/services/Public/Bathymetry_Cache/MapServer`
 - **The visual depth-shading overlay (WMSTile `export` layer) was REMOVED 2026-07-28** at the user's
-  request. What remains is the **point depth readout** (the "DEPTH" box) and the **shallow-water
-  alert**, both fed by the ArcGIS **`identify`** endpoint (`fetchDepthMeters`) — a single-point query,
-  not the tile layer. Offline downloads no longer prefetch depth tiles (`includeDepth: false`).
+  request, including all its supporting code — `lib/offlineTiles.ts` no longer has any depth-tile
+  prefetch machinery (`DEPTH_TILE_CACHE`/`depthTileUrl`/etc. deleted, not just disabled). What remains
+  is the **point depth readout** (the "DEPTH" box) and the **shallow-water alert**, both fed by the
+  ArcGIS **`identify`** endpoint (`fetchDepthMeters`) — a single-point query, unrelated to tiles.
+  Offline downloads are base-map tiles only.
 - If the shading layer is ever wanted back: it was a `<WMSTile>` against the `export` endpoint
   (bbox-based EPSG:3857). Gotcha for next time — the cache levels are numbered 0–11 but map to
   web-mercator zoom 9–20 (offset 9), so a plain `{z}/{x}/{y}` UrlTile shows blank; `export`/WMSTile
@@ -85,17 +91,17 @@ Notes:
   into that exact layout.
 - **Decision (2026-07-28):** online base stays **native Apple/Google** (no MapTiler quota, online
   look unchanged); MapTiler is used **only for offline** (download + offline serving). Populate the
-  offline cache with "download this area" while online. Depth layer still caches online (county
-  server, free) + offline. Revisit if the offline (MapTiler) look feels too different from online —
-  the alternative is MapTiler (or self-hosted/MapLibre) everywhere for a consistent look. See the
-  long provider discussion: raster self-host = region-only; worldwide self-host needs MapLibre+Protomaps.
+  offline cache with "download this area" while online. Revisit if the offline (MapTiler) look feels
+  too different from online — the alternative is MapTiler (or self-hosted/MapLibre) everywhere for a
+  consistent look. See the long provider discussion: raster self-host = region-only; worldwide
+  self-host needs MapLibre+Protomaps.
 - **Requires the dev build, not Expo Go** (tile caching is native).
 - Manage saved areas: Settings → Offline Maps.
 
 ## Key files
 
-- `screens/MapScreen.tsx` — the map: depth layer, shallow alert, speed, trip start/end, offline
-  toggle + "download this area" + progress.
+- `screens/MapScreen.tsx` — the map: depth readout + shallow alert, speed, trip start/end, offline
+  toggle + "download this area" + progress, conditions icon/panel, clustering + search.
 - `contexts/TripContext.tsx` — trip tracking; now records the GPS **path** and saves finished trips.
 - `lib/tripHistory.ts` — local (AsyncStorage) trip history (route + stats).
 - `screens/TripsScreen.tsx` / `TripDetailScreen.tsx` — My Trips list + route detail (post/share).
