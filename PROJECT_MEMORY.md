@@ -35,12 +35,12 @@ Goal isn't "beat Wavve everywhere" — it's "make Wavve pointless for a Simcoe C
 
 | # | Feature | Status |
 |---|---------|--------|
-| 1 | Depth-shading layer (whole-water color, not just a point) | ✅ built |
-| 2 | Draft-aware shallow-water alert (buzz + banner) | ✅ built |
+| 1 | Depth-shading layer (whole-water color) | ❌ removed 2026-07-28 — user felt the visual tint wasn't helpful to boaters |
+| 2 | Draft-aware shallow-water alert (buzz + banner) | ✅ built (kept) |
 | 3 | Trip track recording + "My Trips" (route line, post to feed, share) | ✅ built |
 | 4 | Offline maps (download areas; base + depth work with no signal) | ✅ built |
 | 5 | Live conditions on the map as a drag-up **bottom sheet** | ✅ built (`screens/components/ConditionsSheet.tsx`) |
-| 6 | Marker **clustering** + **place/marina search** | ⏳ agreed, not started |
+| 6 | Marker **clustering** + **place/marina search** | ✅ built (`lib/clustering.ts`, `lib/geocode.ts`) |
 
 Notes:
 - #5 is a **bottom sheet** (NOT a left-edge drawer — conflicts with iOS back-swipe), built on core
@@ -49,15 +49,27 @@ Notes:
   Open-Meteo's marine API doesn't cover inland lakes; revisit if an inland wave source appears.
 - Known nit: when expanded, the sheet overlaps the Start Trip button / depth readout (collapse to
   interact). Fine for MVP; could add a scrim or shift controls later.
+- #6 clustering is **dependency-free** (`lib/clustering.ts` grid clusterer keyed off the visible
+  region) — no native lib, no rebuild. Only catch pins cluster; marinas stay individual. Tap a
+  numbered bubble to zoom in. Search (`lib/geocode.ts`) = local marina filter + Open-Meteo place
+  geocoding (free, no key); works offline for marinas.
+- Known nit: the map's **top HUD is crowded** (search bar + corner buttons + hint/trip-stats can
+  overlap on smaller screens) — positions may need nudging once seen on device.
+
+## All six map features are built (2026-07-28). Next: on-device testing, then polish the HUD layout.
 
 ## Depth data (features #1, #2, #4)
 
 - Source: **Simcoe County bathymetry**, ArcGIS cached MapServer:
   `https://maps.simcoe.ca/arcgis/rest/services/Public/Bathymetry_Cache/MapServer`
-- **Gotcha:** its tile cache levels are numbered **0–11** but map to web-mercator zoom **9–20**
-  (offset of 9). A plain `{z}/{x}/{y}` UrlTile requests non-existent levels → blank. We render it
-  via `<WMSTile>` against the **`export`** endpoint (bbox-based, immune to the offset). WMS proper
-  is disabled on the service; `export` works.
+- **The visual depth-shading overlay (WMSTile `export` layer) was REMOVED 2026-07-28** at the user's
+  request. What remains is the **point depth readout** (the "DEPTH" box) and the **shallow-water
+  alert**, both fed by the ArcGIS **`identify`** endpoint (`fetchDepthMeters`) — a single-point query,
+  not the tile layer. Offline downloads no longer prefetch depth tiles (`includeDepth: false`).
+- If the shading layer is ever wanted back: it was a `<WMSTile>` against the `export` endpoint
+  (bbox-based EPSG:3857). Gotcha for next time — the cache levels are numbered 0–11 but map to
+  web-mercator zoom 9–20 (offset 9), so a plain `{z}/{x}/{y}` UrlTile shows blank; `export`/WMSTile
+  sidesteps it. WMS proper is disabled on the service.
 - Always show the attribution + "reference only, not for navigation" disclaimer when depth is shown.
 
 ## Offline maps (feature #4)

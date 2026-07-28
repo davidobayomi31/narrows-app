@@ -13,7 +13,7 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
-import MapView, { Marker, LongPressEvent, Callout, WMSTile, UrlTile } from 'react-native-maps';
+import MapView, { Marker, LongPressEvent, Callout, UrlTile } from 'react-native-maps';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { Pedometer } from 'expo-sensors';
@@ -41,7 +41,6 @@ import {
 } from '../constants/mapTiles';
 import {
   BASE_TILE_CACHE,
-  DEPTH_TILE_CACHE,
   downloadRegion,
   estimateTileCount,
   addRegion,
@@ -71,17 +70,6 @@ type CatchPin = {
 // Data © County of Simcoe, Open Government Licence – Simcoe County. Reference only.
 const DEPTH_IDENTIFY =
   'https://maps.simcoe.ca/arcgis/rest/services/Public/Bathymetry_Cache/MapServer/identify';
-
-// Depth-shading overlay across the whole visible water. The service is a cached
-// MapServer whose tile levels are numbered 0–11 (they map to web-mercator zoom
-// 9–20), so a plain {z}/{y}/{x} UrlTile would request non-existent levels. We
-// use its dynamic `export` endpoint via <WMSTile>, which requests each tile by
-// bounding box (EPSG:3857) and so is immune to the level-numbering offset.
-// Data © County of Simcoe, Open Government Licence – Simcoe County. Reference only.
-const DEPTH_EXPORT =
-  'https://maps.simcoe.ca/arcgis/rest/services/Public/Bathymetry_Cache/MapServer/export' +
-  '?bbox={minX},{minY},{maxX},{maxY}&bboxSR=3857&imageSR=3857&size={width},{height}' +
-  '&dpi=96&format=png32&transparent=true&f=image';
 
 async function fetchDepthMeters(lat: number, lon: number): Promise<number | null> {
   const d = 0.01; // small bbox around the point so identify has a map extent
@@ -167,9 +155,6 @@ export default function MapScreen() {
   const pedSubRef = useRef<{ remove: () => void } | null>(null);
   const onFootTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [mapType, setMapType] = useState<'standard' | 'satellite'>('standard');
-  // the depth-shading overlay (whole-water color layer); on by default since
-  // it's the map's headline feature, toggled off from the map for a clean base.
-  const [showDepthLayer, setShowDepthLayer] = useState(true);
   const [depthM, setDepthM] = useState<number | null>(null);
   // shallow-water warning banner + refs so the GPS watcher (set up once) reads
   // the live alert settings without being torn down when they change.
@@ -269,7 +254,7 @@ export default function MapScreen() {
 
     Alert.alert(
       'Download this area?',
-      `Saves ~${count.toLocaleString()} map tiles for offline use, including depth shading.`,
+      `Saves ~${count.toLocaleString()} map tiles for offline use.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -280,6 +265,7 @@ export default function MapScreen() {
             const result = await downloadRegion(bounds, {
               minZ: OFFLINE_MIN_ZOOM,
               maxZ: OFFLINE_MAX_ZOOM,
+              includeDepth: false, // depth shading layer removed — base tiles only
               onProgress: setDownload,
               shouldCancel: () => cancelDownloadRef.current,
             });
@@ -635,21 +621,6 @@ export default function MapScreen() {
           />
         )}
 
-        {/* depth-shading layer — rendered under all markers via the county's
-            dynamic export endpoint, one bbox request per tile. tileCachePath makes
-            displayed tiles cache to disk (and prefetch land here); offlineMode
-            serves them with no network. */}
-        {showDepthLayer && (
-          <WMSTile
-            urlTemplate={DEPTH_EXPORT}
-            opacity={0.55}
-            tileSize={256}
-            zIndex={-1}
-            tileCachePath={DEPTH_TILE_CACHE}
-            offlineMode={offlineMode}
-          />
-        )}
-
         {marinas
           .filter((m) => m.latitude != null && m.longitude != null)
           .map((m) => (
@@ -709,16 +680,10 @@ export default function MapScreen() {
         })}
       </MapView>
 
-      {/* depth-layer toggle — top-left, away from the right-hand readout column */}
-      <TouchableOpacity
-        style={styles.depthLayerBtn}
-        onPress={() => setShowDepthLayer((v) => !v)}
-      >
-        <Ionicons
-          name={showDepthLayer ? 'water' : 'water-outline'}
-          size={20}
-          color={showDepthLayer ? '#4FB0E0' : Colors.cream}
-        />
+      {/* search bar — tap to search marinas (local) and places (geocoded) */}
+      <TouchableOpacity style={styles.searchBar} activeOpacity={0.9} onPress={() => setShowSearch(true)}>
+        <Ionicons name="search" size={16} color={Colors.muted} />
+        <Text style={styles.searchBarText}>Search marinas & places</Text>
       </TouchableOpacity>
 
       {/* offline mode toggle — serve tiles from the on-device cache only */}
@@ -799,7 +764,7 @@ export default function MapScreen() {
       {/* hint pill */}
       {!isTracking && (
         <View style={styles.hint} pointerEvents="none">
-          <Text style={styles.hintText}>Long-press the map to drop a catch pin</Text>
+          <Text style={styles.hintText}>Long-press to drop a catch pin</Text>
         </View>
       )}
 
@@ -836,8 +801,8 @@ export default function MapScreen() {
         </View>
       )}
 
-      {/* attribution + safety disclaimer — required whenever any depth data is shown */}
-      {(showDepthLayer || depthM != null) && (
+      {/* attribution + safety disclaimer — shown whenever a depth reading is displayed */}
+      {depthM != null && (
         <View style={styles.depthCredit} pointerEvents="none">
           <Text style={styles.depthCreditText}>
             Depth © Simcoe County (OGL) · reference only, not for navigation
@@ -852,6 +817,50 @@ export default function MapScreen() {
         <View style={styles.speedBox} pointerEvents="none">
           <Text style={styles.speedValue}>{formatSpeed(speedMps)}</Text>
           <Text style={styles.speedCaption}>SPEED</Text>
+        </View>
+      )}
+
+      {/* search overlay — input + marina/place results */}
+      {showSearch && (
+        <View style={styles.searchOverlay}>
+          <View style={styles.searchInputRow}>
+            <Ionicons name="search" size={18} color={Colors.muted} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Marina or place…"
+              placeholderTextColor={Colors.muted}
+              value={query}
+              onChangeText={onQueryChange}
+              autoFocus
+              returnKeyType="search"
+            />
+            <TouchableOpacity onPress={closeSearch}>
+              <Text style={styles.searchCancel}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView keyboardShouldPersistTaps="handled" style={styles.searchResults}>
+            {marinaResults.map((m) => (
+              <TouchableOpacity
+                key={`m-${m.id}`}
+                style={styles.resultRow}
+                onPress={() => goToLocation(m.latitude as number, m.longitude as number)}
+              >
+                <Ionicons name="boat" size={16} color={Colors.gold} />
+                <Text style={styles.resultText} numberOfLines={1}>{m.name}</Text>
+                <Text style={styles.resultTag}>Marina</Text>
+              </TouchableOpacity>
+            ))}
+            {placeResults.map((p) => (
+              <TouchableOpacity key={p.id} style={styles.resultRow} onPress={() => goToLocation(p.latitude, p.longitude)}>
+                <Ionicons name="location-outline" size={16} color={Colors.muted} />
+                <Text style={styles.resultText} numberOfLines={1}>{p.name}</Text>
+                <Text style={styles.resultTag}>{p.detail}</Text>
+              </TouchableOpacity>
+            ))}
+            {query.trim().length >= 2 && marinaResults.length === 0 && placeResults.length === 0 && (
+              <Text style={styles.noResults}>No matches</Text>
+            )}
+          </ScrollView>
         </View>
       )}
 
@@ -927,10 +936,70 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: Colors.cream,
   },
+  clusterBubble: {
+    minWidth: 34,
+    height: 34,
+    paddingHorizontal: 8,
+    borderRadius: 17,
+    backgroundColor: Colors.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: Colors.background,
+  },
+  clusterText: { color: Colors.black, fontSize: 14, fontWeight: '800' },
+  searchBar: {
+    position: 'absolute',
+    top: 60,
+    left: 64,
+    right: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(0,0,0,0.72)',
+    borderRadius: 20,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+  },
+  searchBarText: { color: Colors.muted, fontSize: 14, fontWeight: '600' },
+  searchOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.9)',
+    paddingTop: 56,
+    paddingHorizontal: 16,
+  },
+  searchInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  searchInput: { flex: 1, color: Colors.cream, fontSize: 16 },
+  searchCancel: { color: Colors.gold, fontSize: 15, fontWeight: '600' },
+  searchResults: { marginTop: 8 },
+  resultRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  resultText: { flex: 1, color: Colors.cream, fontSize: 15, fontWeight: '600' },
+  resultTag: { color: Colors.muted, fontSize: 12 },
+  noResults: { color: Colors.muted, fontSize: 14, textAlign: 'center', paddingVertical: 24 },
 
   hint: {
     position: 'absolute',
-    top: 60,
+    top: 112,
     alignSelf: 'center',
     backgroundColor: 'rgba(0,0,0,0.6)',
     borderRadius: 20,
@@ -941,7 +1010,7 @@ const styles = StyleSheet.create({
 
   tripStats: {
     position: 'absolute',
-    top: 60,
+    top: 112,
     alignSelf: 'center',
     backgroundColor: 'rgba(0,0,0,0.7)',
     borderRadius: 20,
@@ -1014,7 +1083,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 10,
   },
-  depthLayerBtn: {
+  offlineToggleBtn: {
     position: 'absolute',
     top: 60,
     left: 16,
@@ -1022,17 +1091,9 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 10,
   },
-  offlineToggleBtn: {
-    position: 'absolute',
-    top: 112,
-    left: 16,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 20,
-    padding: 10,
-  },
   downloadAreaBtn: {
     position: 'absolute',
-    top: 164,
+    top: 112,
     left: 16,
     backgroundColor: 'rgba(0,0,0,0.6)',
     borderRadius: 20,
