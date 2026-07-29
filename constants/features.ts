@@ -4,4 +4,4 @@
 // boater-facing side — the "Winterize My Boat" button, the request form, and
 // the status tracker — is built but held back until winterization is fully
 // ready to launch. Flip this to true when it's time to turn it on.
-export const WINTERIZATION_REQUESTS_LIVE = false;
+export const WINTERIZATION_REQUESTS_LIVE = true;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Modal,
   View,
@@ -12,9 +12,11 @@ import {
   Pressable,
   Alert,
 } from 'react-native';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
 import { friendlyError } from '../../lib/errors';
+import { formatDateYMD } from '../../lib/dateFormat';
 import DismissKeyboardView from './DismissKeyboardView';
 
 type Props = {
@@ -28,20 +30,37 @@ type Props = {
 const BOAT_TYPES = ['Powerboat', 'Sailboat', 'Pontoon', 'Personal Watercraft', 'Other'];
 
 // Very rough, Narrows-wide placeholder estimate — clearly labeled as such.
-// The marina sets the real, final price when they approve the request.
+// The marina sets the real, final price when they approve the request (this
+// overwrites the same `quoted_cents` field the estimate is stored in).
 function estimatePrice(lengthFt: number): number {
   const raw = 200 + lengthFt * 15;
   return Math.round(raw / 10) * 10;
 }
 
 export default function WinterizeRequestModal({ visible, marinaId, marinaProfileId, onClose, onSubmitted }: Props) {
+  const [listingId, setListingId] = useState<string | null>(null);
   const [boatType, setBoatType] = useState<string | null>(null);
   const [lengthFt, setLengthFt] = useState('');
   const [alreadyAtMarina, setAlreadyAtMarina] = useState<boolean | null>(null);
   const [needsTow, setNeedsTow] = useState<boolean | null>(null);
-  const [preferredDate, setPreferredDate] = useState('');
+  const [preferredDate, setPreferredDate] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // The marina's "Winterization" listing is auto-created (by a Supabase
+  // trigger) whenever winterization_enabled flips on, so this should always
+  // find a row — but we still handle "not found" below just in case.
+  useEffect(() => {
+    if (!visible) return;
+    supabase
+      .from('marina_listings')
+      .select('id')
+      .eq('marina_id', marinaId)
+      .eq('listing_type', 'winterization')
+      .maybeSingle()
+      .then(({ data }) => setListingId(data?.id ?? null));
+  }, [visible, marinaId]);
 
   const parsedLength = parseFloat(lengthFt);
   const hasValidLength = lengthFt.trim().length > 0 && !Number.isNaN(parsedLength) && parsedLength > 0;
@@ -57,8 +76,14 @@ export default function WinterizeRequestModal({ visible, marinaId, marinaProfile
     setLengthFt('');
     setAlreadyAtMarina(null);
     setNeedsTow(null);
-    setPreferredDate('');
+    setPreferredDate(null);
+    setShowDatePicker(false);
     setNotes('');
+  }
+
+  function onDateChange(event: DateTimePickerEvent, date?: Date) {
+    if (Platform.OS === 'android') setShowDatePicker(false); // iOS stays open until "Done"
+    if (event.type !== 'dismissed' && date) setPreferredDate(date);
   }
 
   function close() {
@@ -68,6 +93,12 @@ export default function WinterizeRequestModal({ visible, marinaId, marinaProfile
 
   async function submit() {
     if (!canSubmit || saving) return;
+
+    if (!listingId) {
+      Alert.alert('Not available', 'This marina has not set up winterization booking yet.');
+      return;
+    }
+
     setSaving(true);
 
     const { data: { user } } = await supabase.auth.getUser();
@@ -79,15 +110,17 @@ export default function WinterizeRequestModal({ visible, marinaId, marinaProfile
     const boatLocation = alreadyAtMarina ? 'at_marina' : needsTow ? 'needs_tow' : 'needs_drop_off';
     const estimate = estimatePrice(parsedLength);
 
-    const { error } = await supabase.from('winterization_requests').insert({
-      marina_id: marinaId,
+    const { error } = await supabase.from('bookings').insert({
+      listing_id: listingId,
       user_id: user.id,
       boat_type: boatType,
       boat_length_ft: parsedLength,
-      boat_location: boatLocation,
-      logistics_notes: notes.trim() || null,
-      preferred_date: preferredDate.trim() || null,
-      estimated_price: estimate,
+      details: { boat_location: boatLocation },
+      boater_notes: notes.trim() || null,
+      start_date: preferredDate ? formatDateYMD(preferredDate) : null,
+      quoted_cents: Math.round(estimate * 100),
+      // marina_id and exclusive are stamped server-side by a trigger — never
+      // set them from the client.
     });
 
     if (!error && marinaProfileId) {
@@ -185,13 +218,29 @@ export default function WinterizeRequestModal({ visible, marinaId, marinaProfile
             )}
 
             <Text style={styles.label}>Preferred date (optional)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={Colors.muted}
-              value={preferredDate}
-              onChangeText={setPreferredDate}
-            />
+            <TouchableOpacity style={styles.input} onPress={() => setShowDatePicker(true)}>
+              <Text style={{ color: preferredDate ? Colors.cream : Colors.muted, fontSize: 15 }}>
+                {preferredDate ? formatDateYMD(preferredDate) : 'Select a date'}
+              </Text>
+            </TouchableOpacity>
+
+            {showDatePicker && (
+              <View style={styles.datePickerWrap}>
+                <DateTimePicker
+                  value={preferredDate ?? new Date()}
+                  mode="date"
+                  minimumDate={new Date()}
+                  display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                  onChange={onDateChange}
+                  themeVariant="dark"
+                />
+                {Platform.OS === 'ios' && (
+                  <TouchableOpacity style={styles.datePickerDone} onPress={() => setShowDatePicker(false)}>
+                    <Text style={styles.datePickerDoneText}>Done</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
 
             <Text style={styles.label}>Notes (optional)</Text>
             <TextInput
@@ -265,6 +314,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   notesInput: { minHeight: 70, textAlignVertical: 'top' },
+
+  datePickerWrap: { alignItems: 'center', marginTop: 8 },
+  datePickerDone: { alignSelf: 'stretch', backgroundColor: Colors.gold, borderRadius: 12, paddingVertical: 12, alignItems: 'center', marginTop: 8 },
+  datePickerDoneText: { color: Colors.black, fontWeight: '700', fontSize: 14 },
 
   estimateBox: {
     backgroundColor: Colors.surface,

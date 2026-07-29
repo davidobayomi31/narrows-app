@@ -20,6 +20,7 @@ import { Colors } from '../constants/colors';
 import { WINTERIZATION_REQUESTS_LIVE } from '../constants/features';
 import { supabase } from '../lib/supabase';
 import WinterizeRequestModal from './components/WinterizeRequestModal';
+import WinterizationRequestCard from './components/WinterizationRequestCard';
 
 const MARINA_FALLBACK = 'https://images.unsplash.com/photo-1545671913-b89ac1b4ac10?w=1200&q=80';
 const HERO_OVERLAY = ['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.45)', 'rgba(0,0,0,0.92)'] as const;
@@ -40,6 +41,7 @@ export default function MarinaProfileScreen() {
 
   const [marina, setMarina] = useState<any>(null);
   const [posts, setPosts] = useState<any[]>([]);
+  const [myRequests, setMyRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showWinterize, setShowWinterize] = useState(false);
 
@@ -67,6 +69,23 @@ export default function MarinaProfileScreen() {
         setPosts(postsData || []);
       }
     }
+
+    if (WINTERIZATION_REQUESTS_LIVE) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        // !inner filters on the joined table's column — only bookings whose
+        // listing is a winterization listing come back.
+        const { data: reqData } = await supabase
+          .from('bookings')
+          .select('*, marina_listings!inner(listing_type)')
+          .eq('marina_id', marinaId)
+          .eq('user_id', user.id)
+          .eq('marina_listings.listing_type', 'winterization')
+          .order('created_at', { ascending: false });
+        setMyRequests(reqData || []);
+      }
+    }
+
     setLoading(false);
   }
 
@@ -153,6 +172,17 @@ export default function MarinaProfileScreen() {
           </View>
         </ImageBackground>
 
+        {myRequests.length > 0 && (
+          <View style={styles.requestsSection}>
+            <Text style={styles.sectionTitle}>
+              Your Winterization Request{myRequests.length > 1 ? 's' : ''}
+            </Text>
+            {myRequests.map((r) => (
+              <WinterizationRequestCard key={r.id} request={r} />
+            ))}
+          </View>
+        )}
+
         <View style={styles.postsSection}>
           <Text style={styles.sectionTitle}>Posts</Text>
           {posts.length === 0 ? (
@@ -188,7 +218,7 @@ export default function MarinaProfileScreen() {
         marinaId={marina.id}
         marinaProfileId={marina.profile_id ?? null}
         onClose={() => setShowWinterize(false)}
-        onSubmitted={() => setShowWinterize(false)}
+        onSubmitted={() => { setShowWinterize(false); loadMarina(); }}
       />
     </SafeAreaView>
   );
@@ -256,6 +286,7 @@ const styles = StyleSheet.create({
   },
   winterizeButtonText: { color: Colors.cream, fontWeight: '700', fontSize: 15 },
 
+  requestsSection: { paddingHorizontal: 16, paddingTop: 20 },
   postsSection: { paddingHorizontal: 16, paddingTop: 20 },
   sectionTitle: { color: Colors.cream, fontSize: 16, fontWeight: '700', marginBottom: 16 },
   empty: { color: Colors.muted, fontSize: 14, textAlign: 'center', marginTop: 12 },

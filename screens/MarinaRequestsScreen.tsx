@@ -10,19 +10,22 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
 import { friendlyError } from '../lib/errors';
+import { formatDateYMD, parseDateYMD } from '../lib/dateFormat';
 import { useAccount } from '../contexts/AccountContext';
 import DismissKeyboardView from './components/DismissKeyboardView';
 
 const FILTERS = ['All', 'Requested', 'Approved', 'In Progress', 'Completed', 'Declined'];
 const FILTER_STATUS: Record<string, string> = {
-  Requested: 'requested',
+  Requested: 'pending',
   Approved: 'approved',
   'In Progress': 'in_progress',
   Completed: 'completed',
@@ -30,20 +33,22 @@ const FILTER_STATUS: Record<string, string> = {
 };
 
 const STATUS_LABEL: Record<string, string> = {
-  requested: 'Requested',
+  pending: 'Requested',
   approved: 'Approved',
-  scheduled: 'Scheduled',
   in_progress: 'In Progress',
+  paid: 'Paid',
   completed: 'Completed',
   declined: 'Declined',
+  cancelled: 'Cancelled',
 };
 const STATUS_COLOR: Record<string, string> = {
-  requested: '#92400E',
+  pending: '#92400E',
   approved: '#1B4FD8',
-  scheduled: '#1B4FD8',
   in_progress: '#6B4E9E',
+  paid: '#1B4FD8',
   completed: '#166534',
   declined: '#7F1D1D',
+  cancelled: '#7F1D1D',
 };
 
 const LOCATION_LABEL: Record<string, string> = {
@@ -67,7 +72,8 @@ export default function MarinaRequestsScreen() {
   const [requests, setRequests] = useState<any[]>([]);
   const [selected, setSelected] = useState<any | null>(null);
   const [priceInput, setPriceInput] = useState('');
-  const [dateInput, setDateInput] = useState('');
+  const [dateInput, setDateInput] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useFocusEffect(
@@ -78,10 +84,13 @@ export default function MarinaRequestsScreen() {
 
   async function loadRequests() {
     if (!marina?.id) return;
+    // !inner filters on the joined table's column — only bookings whose
+    // listing is a winterization listing come back.
     const { data: reqData } = await supabase
-      .from('winterization_requests')
-      .select('*')
+      .from('bookings')
+      .select('*, marina_listings!inner(listing_type)')
       .eq('marina_id', marina.id)
+      .eq('marina_listings.listing_type', 'winterization')
       .order('created_at', { ascending: false });
 
     const { data: profilesData } = await supabase
@@ -97,8 +106,14 @@ export default function MarinaRequestsScreen() {
 
   function openDetail(req: any) {
     setSelected(req);
-    setPriceInput(req.marina_price != null ? String(req.marina_price) : '');
-    setDateInput(req.scheduled_date ?? '');
+    setPriceInput(req.quoted_cents != null ? String(req.quoted_cents / 100) : '');
+    setDateInput(req.start_date ? parseDateYMD(req.start_date) : null);
+    setShowDatePicker(false);
+  }
+
+  function onDateChange(event: DateTimePickerEvent, date?: Date) {
+    if (Platform.OS === 'android') setShowDatePicker(false); // iOS stays open until "Done"
+    if (event.type !== 'dismissed' && date) setDateInput(date);
   }
 
   async function notifyBoater(userId: string, message: string) {
@@ -118,14 +133,14 @@ export default function MarinaRequestsScreen() {
       Alert.alert('Price needed', 'Enter the confirmed price before approving.');
       return;
     }
-    if (!dateInput.trim()) {
-      Alert.alert('Date needed', 'Enter a scheduled date before approving.');
+    if (!dateInput) {
+      Alert.alert('Date needed', 'Pick a scheduled date before approving.');
       return;
     }
     setSaving(true);
     const { error } = await supabase
-      .from('winterization_requests')
-      .update({ status: 'approved', marina_price: price, scheduled_date: dateInput.trim() })
+      .from('bookings')
+      .update({ status: 'approved', quoted_cents: Math.round(price * 100), start_date: formatDateYMD(dateInput) })
       .eq('id', selected.id);
     setSaving(false);
     if (error) {
@@ -134,7 +149,7 @@ export default function MarinaRequestsScreen() {
     }
     await notifyBoater(
       selected.user_id,
-      `Your winterization request was approved — $${price} on ${dateInput.trim()}.`
+      `Your winterization request was approved — $${price} on ${formatDateYMD(dateInput)}.`
     );
     setSelected(null);
     loadRequests();
@@ -150,7 +165,7 @@ export default function MarinaRequestsScreen() {
         onPress: async () => {
           setSaving(true);
           const { error } = await supabase
-            .from('winterization_requests')
+            .from('bookings')
             .update({ status: 'declined' })
             .eq('id', selected.id);
           setSaving(false);
@@ -170,7 +185,7 @@ export default function MarinaRequestsScreen() {
     if (!selected) return;
     setSaving(true);
     const { error } = await supabase
-      .from('winterization_requests')
+      .from('bookings')
       .update({ status: next })
       .eq('id', selected.id);
     setSaving(false);
@@ -213,7 +228,7 @@ export default function MarinaRequestsScreen() {
         <Text style={styles.brand}>Requests</Text>
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterRow}>
         {FILTERS.map((f) => (
           <TouchableOpacity
             key={f}
@@ -240,7 +255,7 @@ export default function MarinaRequestsScreen() {
               <Text style={styles.cardDetail}>
                 {r.boat_type || 'Boat'}{r.boat_length_ft ? ` · ${r.boat_length_ft} ft` : ''}
               </Text>
-              {r.preferred_date && <Text style={styles.cardDetail}>Preferred: {r.preferred_date}</Text>}
+              {r.status === 'pending' && r.start_date && <Text style={styles.cardDetail}>Preferred: {r.start_date}</Text>}
               <Text style={styles.cardTime}>{timeAgo(r.created_at)}</Text>
             </TouchableOpacity>
           );
@@ -249,8 +264,10 @@ export default function MarinaRequestsScreen() {
 
       <Modal visible={!!selected} animationType="slide" transparent onRequestClose={() => setSelected(null)}>
         <View style={styles.backdrop}>
+          <Pressable style={styles.spacer} onPress={() => setSelected(null)} />
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.sheet}>
-            <DismissKeyboardView>
+            <View style={styles.handle} />
+            <DismissKeyboardView style={{ flex: 0 }}>
             <ScrollView keyboardShouldPersistTaps="handled">
               {selected && (
                 <>
@@ -262,15 +279,16 @@ export default function MarinaRequestsScreen() {
                   </View>
 
                   <DetailRow label="Boat" value={`${selected.boat_type || '—'}${selected.boat_length_ft ? ` · ${selected.boat_length_ft} ft` : ''}`} />
-                  <DetailRow label="Location" value={LOCATION_LABEL[selected.boat_location] || selected.boat_location} />
-                  {selected.logistics_notes ? <DetailRow label="Logistics notes" value={selected.logistics_notes} /> : null}
-                  <DetailRow label="Preferred date" value={selected.preferred_date || 'No preference'} />
-                  {selected.estimated_price != null && (
-                    <DetailRow label="Boater's estimate" value={`$${selected.estimated_price} (approximate)`} />
-                  )}
+                  <DetailRow label="Location" value={LOCATION_LABEL[selected.details?.boat_location] || selected.details?.boat_location || '—'} />
+                  {selected.boater_notes ? <DetailRow label="Logistics notes" value={selected.boater_notes} /> : null}
 
-                  {selected.status === 'requested' && (
+                  {selected.status === 'pending' && (
                     <>
+                      <DetailRow label="Preferred date" value={selected.start_date || 'No preference'} />
+                      {selected.quoted_cents != null && (
+                        <DetailRow label="Boater's estimate" value={`$${(selected.quoted_cents / 100).toFixed(0)} (approximate)`} />
+                      )}
+
                       <Text style={styles.inputLabel}>Confirmed price ($)</Text>
                       <TextInput
                         style={styles.input}
@@ -281,13 +299,29 @@ export default function MarinaRequestsScreen() {
                         onChangeText={setPriceInput}
                       />
                       <Text style={styles.inputLabel}>Scheduled date</Text>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="YYYY-MM-DD"
-                        placeholderTextColor={Colors.muted}
-                        value={dateInput}
-                        onChangeText={setDateInput}
-                      />
+                      <TouchableOpacity style={styles.input} onPress={() => setShowDatePicker(true)}>
+                        <Text style={{ color: dateInput ? Colors.cream : Colors.muted, fontSize: 15 }}>
+                          {dateInput ? formatDateYMD(dateInput) : 'Select a date'}
+                        </Text>
+                      </TouchableOpacity>
+
+                      {showDatePicker && (
+                        <View style={styles.datePickerWrap}>
+                          <DateTimePicker
+                            value={dateInput ?? new Date()}
+                            mode="date"
+                            minimumDate={new Date()}
+                            display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                            onChange={onDateChange}
+                            themeVariant="dark"
+                          />
+                          {Platform.OS === 'ios' && (
+                            <TouchableOpacity style={styles.datePickerDone} onPress={() => setShowDatePicker(false)}>
+                              <Text style={styles.datePickerDoneText}>Done</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      )}
                       <View style={styles.actionRow}>
                         <TouchableOpacity style={styles.declineBtn} onPress={confirmDecline} disabled={saving}>
                           <Text style={styles.declineBtnText}>Decline</Text>
@@ -301,8 +335,8 @@ export default function MarinaRequestsScreen() {
 
                   {selected.status === 'approved' && (
                     <>
-                      <DetailRow label="Confirmed price" value={`$${selected.marina_price}`} />
-                      <DetailRow label="Scheduled date" value={selected.scheduled_date} />
+                      <DetailRow label="Confirmed price" value={`$${(selected.quoted_cents / 100).toFixed(0)}`} />
+                      <DetailRow label="Scheduled date" value={selected.start_date} />
                       <TouchableOpacity
                         style={[styles.approveBtn, styles.standaloneBtn]}
                         onPress={() => advanceStatus('in_progress')}
@@ -355,7 +389,12 @@ const styles = StyleSheet.create({
   pendingTitle: { color: Colors.cream, fontSize: 18, fontWeight: '700', marginTop: 16, marginBottom: 8 },
   pendingText: { color: Colors.muted, fontSize: 14, textAlign: 'center', lineHeight: 20 },
 
-  filterRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, marginBottom: 12 },
+  // flexGrow: 0 stops the ScrollView itself from expanding to fill leftover
+  // vertical space; alignItems: 'center' stops the row's default cross-axis
+  // 'stretch' from pulling each pill to fill that height — without both, the
+  // tabs render as tall bars instead of small pills.
+  filterScroll: { flexGrow: 0, flexShrink: 0 },
+  filterRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, marginBottom: 12 },
   filterTab: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: Colors.surface },
   filterTabActive: { backgroundColor: Colors.gold },
   filterText: { color: Colors.muted, fontSize: 13 },
@@ -374,7 +413,9 @@ const styles = StyleSheet.create({
   badgeText: { color: Colors.white, fontSize: 11, fontWeight: '700' },
 
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  spacer: { flex: 1 },
   sheet: { backgroundColor: Colors.background, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '85%' },
+  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#3A3A3A', alignSelf: 'center', marginBottom: 8 },
   sheetTitle: { color: Colors.cream, fontSize: 18, fontWeight: '700', marginBottom: 8 },
 
   detailRow: { marginTop: 14 },
@@ -390,6 +431,10 @@ const styles = StyleSheet.create({
     color: Colors.cream,
     fontSize: 15,
   },
+
+  datePickerWrap: { alignItems: 'center', marginTop: 8 },
+  datePickerDone: { alignSelf: 'stretch', backgroundColor: Colors.gold, borderRadius: 12, paddingVertical: 12, alignItems: 'center', marginTop: 8 },
+  datePickerDoneText: { color: Colors.black, fontWeight: '700', fontSize: 14 },
 
   actionRow: { flexDirection: 'row', gap: 12, marginTop: 24 },
   declineBtn: { flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 12, backgroundColor: Colors.surface },

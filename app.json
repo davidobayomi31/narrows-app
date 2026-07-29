@@ -15,11 +15,15 @@
     "ios": {
       "bundleIdentifier": "site.narrows.app",
       "usesAppleSignIn": true,
-      "associatedDomains": ["applinks:narrows.site"],
+      "associatedDomains": [
+        "applinks:narrows.site"
+      ],
       "infoPlist": {
         "NSFaceIDUsageDescription": "Narrows uses Face ID to sign you in quickly and securely.",
         "ITSAppUsesNonExemptEncryption": false,
-        "LSApplicationQueriesSchemes": ["whatsapp"],
+        "LSApplicationQueriesSchemes": [
+          "whatsapp"
+        ],
         "NSMotionUsageDescription": "Narrows uses motion data to tell when you're walking so it can hide boat speed readings while you're on foot."
       },
       "supportsTablet": false
@@ -102,7 +106,8 @@
           "cameraPermission": "Narrows uses your camera so you can take photos and videos of your catches and trips.",
           "microphonePermission": "Narrows uses your microphone to record audio when you capture a video."
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ]
   }
 }
