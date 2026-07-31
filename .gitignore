@@ -43,3 +43,6 @@ yarn-error.*
 
 # local Obsidian MCP connection (personal, not shared)
 .mcp.json
+
+# Supabase CLI local metadata cache (regenerates on `supabase link`)
+supabase/.temp/
