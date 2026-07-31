@@ -52,7 +52,12 @@ export default function MyWinterizationRequestsScreen() {
         )}
 
         {requests.map((r) => (
-          <WinterizationRequestCard key={r.id} request={r} marinaName={r.marina?.name || 'Marina'} />
+          <WinterizationRequestCard
+            key={r.id}
+            request={r}
+            marinaName={r.marina?.name || 'Marina'}
+            onPaid={load}
+          />
         ))}
       </ScrollView>
     </SafeAreaView>

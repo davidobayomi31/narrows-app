@@ -107,7 +107,14 @@
           "microphonePermission": "Narrows uses your microphone to record audio when you capture a video."
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.site.narrows.app",
+          "enableGooglePay": false
+        }
+      ]
     ]
   }
 }

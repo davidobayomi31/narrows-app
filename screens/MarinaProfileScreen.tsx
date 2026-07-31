@@ -178,7 +178,7 @@ export default function MarinaProfileScreen() {
               Your Winterization Request{myRequests.length > 1 ? 's' : ''}
             </Text>
             {myRequests.map((r) => (
-              <WinterizationRequestCard key={r.id} request={r} />
+              <WinterizationRequestCard key={r.id} request={r} onPaid={loadMarina} />
             ))}
           </View>
         )}

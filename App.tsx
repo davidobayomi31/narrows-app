@@ -34,6 +34,8 @@ import { registerForPushNotifications } from './lib/pushNotifications';
 import { supabase } from './lib/supabase';
 import ErrorBoundary from './screens/components/ErrorBoundary';
 import { logError } from './lib/logError';
+import { StripeProvider } from '@stripe/stripe-react-native';
+import { STRIPE_PUBLISHABLE_KEY } from './constants/stripe';
 
 const Stack = createNativeStackNavigator();
 // lets us navigate from outside React components (e.g. a push notification tap)
@@ -97,6 +99,7 @@ export default function App(){
 
   return (
     <ErrorBoundary>
+    <StripeProvider publishableKey={STRIPE_PUBLISHABLE_KEY}>
     <UnitsProvider>
     <AccountProvider>
     <TripProvider>
@@ -186,6 +189,7 @@ export default function App(){
     </TripProvider>
     </AccountProvider>
     </UnitsProvider>
+    </StripeProvider>
     </ErrorBoundary>
   );
 }

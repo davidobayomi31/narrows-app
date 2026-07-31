@@ -1,6 +1,9 @@
-import { View, Text, StyleSheet } from 'react-native';
+import { useState } from 'react';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useStripe } from '@stripe/stripe-react-native';
 import { Colors } from '../../constants/colors';
+import { supabase } from '../../lib/supabase';
 
 const STEPS = [
   { key: 'pending', label: 'Requested' },
@@ -29,9 +32,52 @@ type Props = {
   // pass this on a screen listing requests across multiple marinas; omit it
   // when the card already lives on that marina's own page.
   marinaName?: string;
+  // called after a successful payment so the screen can refetch and make the
+  // Pay button disappear (payment_intent_id is now set on the booking).
+  onPaid?: () => void;
 };
 
-export default function WinterizationRequestCard({ request: r, marinaName }: Props) {
+export default function WinterizationRequestCard({ request: r, marinaName, onPaid }: Props) {
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
+  const [paying, setPaying] = useState(false);
+
+  const amountCents = r.deposit_cents ?? r.quoted_cents;
+  const showPayButton = r.status === 'approved' && !r.payment_intent_id && amountCents > 0;
+
+  async function handlePay() {
+    setPaying(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('create-payment-intent', {
+        body: { booking_id: r.id },
+      });
+      if (error || !data?.client_secret) {
+        throw new Error(error?.message || 'Could not start payment');
+      }
+
+      const { error: sheetError } = await initPaymentSheet({
+        merchantDisplayName: 'Narrows',
+        paymentIntentClientSecret: data.client_secret,
+      });
+      if (sheetError) throw new Error(sheetError.message);
+
+      const { error: presentError } = await presentPaymentSheet();
+      if (presentError) {
+        // Canceled is not a real failure — the boater just backed out.
+        if (presentError.code !== 'Canceled') {
+          Alert.alert('Payment failed', presentError.message);
+        }
+        return;
+      }
+
+      Alert.alert('Payment successful', 'Your deposit has been paid.');
+      onPaid?.();
+    } catch (err) {
+      Alert.alert('Payment failed', (err as Error).message);
+    } finally {
+      setPaying(false);
+    }
+  }
+
   return (
     <View style={styles.card}>
       {marinaName && <Text style={styles.marinaName}>{marinaName}</Text>}
@@ -67,10 +113,21 @@ export default function WinterizationRequestCard({ request: r, marinaName }: Pro
         <View style={styles.confirmedBox}>
           {r.quoted_cents != null && <Text style={styles.confirmedText}>Confirmed price: ${(r.quoted_cents / 100).toFixed(0)}</Text>}
           {r.start_date && <Text style={styles.confirmedText}>Scheduled: {r.start_date}</Text>}
+          {r.payment_intent_id && <Text style={styles.confirmedText}>Deposit paid ✓</Text>}
         </View>
       ) : r.quoted_cents != null ? (
         <Text style={styles.estimateText}>Estimate: ${(r.quoted_cents / 100).toFixed(0)} (approximate)</Text>
       ) : null}
+
+      {showPayButton && (
+        <Pressable style={styles.payButton} onPress={handlePay} disabled={paying}>
+          {paying ? (
+            <ActivityIndicator color={Colors.background} />
+          ) : (
+            <Text style={styles.payButtonText}>Pay ${(amountCents / 100).toFixed(0)} deposit</Text>
+          )}
+        </Pressable>
+      )}
 
       <Text style={styles.time}>Sent {timeAgo(r.created_at)}</Text>
     </View>
@@ -94,6 +151,9 @@ const styles = StyleSheet.create({
 
   declinedBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12 },
   declinedText: { color: '#FF6B6B', fontSize: 13, fontWeight: '600' },
+
+  payButton: { backgroundColor: Colors.gold, borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginTop: 12 },
+  payButtonText: { color: Colors.background, fontSize: 14, fontWeight: '700' },
 
   confirmedBox: { marginTop: 12, backgroundColor: Colors.surfaceAlt, borderRadius: 10, padding: 10 },
   confirmedText: { color: Colors.cream, fontSize: 13 },
