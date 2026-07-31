@@ -28,6 +28,36 @@ export default function NotificationsScreen() {
     });
   }
 
+  async function openMessage(item: any) {
+    // actor_id is the sender. If it matches a marina's profile_id, I'm the
+    // boater who was messaged BY that marina -- open that marina's profile
+    // (its DM icon) with a param to auto-open the chat. Otherwise actor_id is
+    // a boater's own user id and I'm the marina owner -- open my Messages
+    // inbox to that boater's thread directly.
+    const { data: marinaRow } = await supabase
+      .from('marinas')
+      .select('id')
+      .eq('profile_id', item.actor_id)
+      .maybeSingle();
+
+    if (marinaRow) {
+      navigation.navigate('MarinaProfile', { marinaId: marinaRow.id, openChat: true, openChatNonce: Date.now() });
+    } else {
+      navigation.navigate('MarinaMessages', { openBoaterId: item.actor_id, openBoaterNonce: Date.now() });
+    }
+  }
+
+  function openNotification(item: any) {
+    if (item.type === 'message') {
+      openMessage(item);
+    } else if (item.type !== 'winterization') {
+      openPost(item);
+    }
+    // 'winterization' notifications have nowhere dedicated to deep-link to
+    // yet (they're read from the Requests tab / MyWinterizationRequests) --
+    // tapping just marks it read, which already happens on screen load.
+  }
+
   // Run the DB load + state update AFTER the push/pop animation finishes.
   // Updating state mid-transition can deadlock the native stack (whole-app
   // freeze) on the new architecture, especially on repeated navigation.
@@ -95,14 +125,16 @@ export default function NotificationsScreen() {
             <TouchableOpacity
               style={styles.row}
               activeOpacity={0.7}
-              onPress={() => openPost(item)}
-              disabled={!item.post_id}
+              onPress={() => openNotification(item)}
+              disabled={!item.post_id && item.type !== 'message'}
             >
               <View style={styles.iconWrap}>
                 {item.type === 'like' ? (
                   <MaterialCommunityIcons name="anchor" size={18} color={Colors.gold} />
                 ) : item.type === 'winterization' ? (
                   <Ionicons name="snow" size={16} color={Colors.gold} />
+                ) : item.type === 'message' ? (
+                  <Ionicons name="paper-plane" size={16} color={Colors.gold} />
                 ) : (
                   <Ionicons name="chatbubble" size={16} color={Colors.gold} />
                 )}
@@ -111,6 +143,11 @@ export default function NotificationsScreen() {
                 <Text style={styles.text}>
                   {item.type === 'winterization' ? (
                     item.comment_body
+                  ) : item.type === 'message' ? (
+                    <>
+                      <Text style={styles.name}>{name}</Text>
+                      {item.comment_body ? `: "${item.comment_body}"` : ' sent you a message'}
+                    </>
                   ) : (
                     <>
                       <Text style={styles.name}>{name}</Text>

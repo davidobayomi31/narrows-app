@@ -13,13 +13,14 @@ import {
   Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
 import { friendlyError } from '../lib/errors';
 import { formatDateYMD, parseDateYMD } from '../lib/dateFormat';
+import { sendPush } from '../lib/sendPush';
 import { useAccount } from '../contexts/AccountContext';
 import DismissKeyboardView from './components/DismissKeyboardView';
 
@@ -67,6 +68,7 @@ function timeAgo(iso: string) {
 }
 
 export default function MarinaRequestsScreen() {
+  const navigation = useNavigation<any>();
   const { loading: accountLoading, marina } = useAccount();
   const [activeFilter, setActiveFilter] = useState('All');
   const [requests, setRequests] = useState<any[]>([]);
@@ -75,12 +77,33 @@ export default function MarinaRequestsScreen() {
   const [dateInput, setDateInput] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [unreadMessages, setUnreadMessages] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
-      if (marina?.id) loadRequests();
+      if (marina?.id) {
+        loadRequests();
+        loadUnreadMessages();
+      }
     }, [marina?.id])
   );
+
+  async function loadUnreadMessages() {
+    if (!marina?.id) return;
+    // marina.profile_id (the marina row's owner column) isn't on the
+    // OwnedMarina type -- but since accountType === 'marina' was resolved by
+    // matching marinas.profile_id to this session's own user id, "my id" IS
+    // that value.
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { count } = await supabase
+      .from('messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('marina_id', marina.id)
+      .neq('sender_id', user.id)
+      .is('read_at', null);
+    setUnreadMessages(count || 0);
+  }
 
   async function loadRequests() {
     if (!marina?.id) return;
@@ -116,7 +139,7 @@ export default function MarinaRequestsScreen() {
     if (event.type !== 'dismissed' && date) setDateInput(date);
   }
 
-  async function notifyBoater(userId: string, message: string) {
+  async function notifyBoater(userId: string, message: string, title = 'Winterization update') {
     const { data: { user } } = await supabase.auth.getUser();
     await supabase.from('notifications').insert({
       recipient_id: userId,
@@ -124,6 +147,7 @@ export default function MarinaRequestsScreen() {
       type: 'winterization',
       comment_body: message,
     });
+    sendPush(userId, title, message);
   }
 
   async function approve() {
@@ -149,7 +173,8 @@ export default function MarinaRequestsScreen() {
     }
     await notifyBoater(
       selected.user_id,
-      `Your winterization request was approved — $${price} on ${formatDateYMD(dateInput)}.`
+      `Your winterization request was approved — $${price} on ${formatDateYMD(dateInput)}.`,
+      'Request approved'
     );
     setSelected(null);
     loadRequests();
@@ -173,7 +198,7 @@ export default function MarinaRequestsScreen() {
             Alert.alert('Could not decline', friendlyError(error));
             return;
           }
-          await notifyBoater(selected.user_id, 'Your winterization request was declined.');
+          await notifyBoater(selected.user_id, 'Your winterization request was declined.', 'Request declined');
           setSelected(null);
           loadRequests();
         },
@@ -197,7 +222,8 @@ export default function MarinaRequestsScreen() {
       selected.user_id,
       next === 'in_progress'
         ? 'Your boat winterization has started.'
-        : 'Your boat has been winterized — all done!'
+        : 'Your boat has been winterized — all done!',
+      next === 'in_progress' ? 'Winterization started' : 'Winterization complete'
     );
     setSelected(null);
     loadRequests();
@@ -226,6 +252,18 @@ export default function MarinaRequestsScreen() {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.topBar}>
         <Text style={styles.brand}>Requests</Text>
+        <TouchableOpacity
+          style={styles.messagesIconButton}
+          onPress={() => navigation.navigate('MarinaMessages')}
+          hitSlop={10}
+        >
+          <Ionicons name="paper-plane-outline" size={22} color={Colors.cream} />
+          {unreadMessages > 0 && (
+            <View style={styles.messagesBadge}>
+              <Text style={styles.messagesBadgeText}>{unreadMessages > 9 ? '9+' : unreadMessages}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterRow}>
@@ -280,6 +318,9 @@ export default function MarinaRequestsScreen() {
 
                   <DetailRow label="Boat" value={`${selected.boat_type || '—'}${selected.boat_length_ft ? ` · ${selected.boat_length_ft} ft` : ''}`} />
                   <DetailRow label="Location" value={LOCATION_LABEL[selected.details?.boat_location] || selected.details?.boat_location || '—'} />
+                  {selected.details?.tow_address ? (
+                    <DetailRow label="Tow pickup address" value={selected.details.tow_address} />
+                  ) : null}
                   {selected.boater_notes ? <DetailRow label="Logistics notes" value={selected.boater_notes} /> : null}
 
                   {selected.status === 'pending' && (
@@ -333,10 +374,16 @@ export default function MarinaRequestsScreen() {
                     </>
                   )}
 
-                  {selected.status === 'approved' && (
+                  {(selected.status === 'approved' || selected.status === 'paid') && (
                     <>
                       <DetailRow label="Confirmed price" value={`$${(selected.quoted_cents / 100).toFixed(0)}`} />
                       <DetailRow label="Scheduled date" value={selected.start_date} />
+                      {selected.status === 'paid' && (
+                        <DetailRow
+                          label="Deposit"
+                          value={`$${((selected.amount_paid_cents ?? 0) / 100).toFixed(0)} paid ✓`}
+                        />
+                      )}
                       <TouchableOpacity
                         style={[styles.approveBtn, styles.standaloneBtn]}
                         onPress={() => advanceStatus('in_progress')}
@@ -382,8 +429,22 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: Colors.background },
-  topBar: { paddingHorizontal: 16, paddingVertical: 10 },
+  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10 },
   brand: { color: Colors.cream, fontSize: 22, fontWeight: 'bold', letterSpacing: 2 },
+  messagesIconButton: { padding: 4 },
+  messagesBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: Colors.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  messagesBadgeText: { color: Colors.black, fontSize: 10, fontWeight: '700' },
 
   pendingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   pendingTitle: { color: Colors.cream, fontSize: 18, fontWeight: '700', marginTop: 16, marginBottom: 8 },

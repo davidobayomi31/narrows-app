@@ -19,6 +19,7 @@ import EditProfileScreen from './screens/EditProfileScreen';
 import EventsScreen from './screens/EventsScreen';
 import MarinaProfileScreen from './screens/MarinaProfileScreen';
 import MyWinterizationRequestsScreen from './screens/MyWinterizationRequestsScreen';
+import MarinaMessagesScreen from './screens/MarinaMessagesScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
 import PostDetailScreen from './screens/PostDetailScreen';
 import TripsScreen from './screens/TripsScreen';
@@ -151,6 +152,7 @@ export default function App(){
           }}
         />
         <Stack.Screen name='MarinaProfile' component={MarinaProfileScreen} />
+        <Stack.Screen name='MarinaMessages' component={MarinaMessagesScreen} />
         <Stack.Screen
           name='MyWinterizationRequests'
           component={MyWinterizationRequestsScreen}

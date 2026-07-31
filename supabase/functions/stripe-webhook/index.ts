@@ -8,17 +8,28 @@
 // POST here, so everything hinges on Stripe's signature over the raw body.
 //
 // Deploy:  supabase functions deploy stripe-webhook --no-verify-jwt
-// Requires a secret: supabase secrets set STRIPE_WEBHOOK_SECRET=whsec_...
+// Requires two secrets (Stripe's newer "event destinations" UI scopes a
+// destination to EITHER "Your account" OR "Connected accounts", not both, so
+// this needs two destinations pointing at the same URL, each with its own
+// signing secret):
+//   supabase secrets set STRIPE_WEBHOOK_SECRET=whsec_...          (Your account)
+//   supabase secrets set STRIPE_WEBHOOK_SECRET_CONNECT=whsec_...  (Connected accounts)
 // (STRIPE_SECRET_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY are already set
 // from the other two Stripe functions.)
 //
-// Stripe Dashboard setup (one-time, David):
-//   Developers -> Webhooks -> Add endpoint
-//   URL: https://pddfyikqpuuuzgqhwjgu.supabase.co/functions/v1/stripe-webhook
-//   Listen to: "Your account and connected accounts" (so both event types
-//   below reach this one endpoint with a single signing secret) -> select
-//   payment_intent.succeeded and account.updated. Copy the "Signing secret"
-//   shown after creating it into the STRIPE_WEBHOOK_SECRET command above.
+// Stripe Dashboard setup (one-time, David), two destinations, same URL:
+//   URL for both: https://pddfyikqpuuuzgqhwjgu.supabase.co/functions/v1/stripe-webhook
+//   1) Scope "Your account" -> event payment_intent.succeeded (this is the
+//      one that flips a booking to 'paid' -- PaymentIntents are created on
+//      the platform account via transfer_data.destination, so this event
+//      fires on "Your account", not "Connected accounts").
+//   2) Scope "Connected accounts" -> event account.updated (resyncs
+//      stripe_charges_enabled -- a secondary safety net; create-connected-account
+//      already resyncs this on every call, so this destination is optional
+//      but adds a second layer of protection if that call is ever skipped).
+//   Each destination shows its own "Signing secret" after creation -- copy
+//   destination 1's into STRIPE_WEBHOOK_SECRET and destination 2's into
+//   STRIPE_WEBHOOK_SECRET_CONNECT above.
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import Stripe from 'npm:stripe@17.7.0';
@@ -29,6 +40,8 @@ const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, {
 });
 
 const webhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET')!;
+// Optional: only set once the "Connected accounts" destination exists.
+const webhookSecretConnect = Deno.env.get('STRIPE_WEBHOOK_SECRET_CONNECT');
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -51,11 +64,21 @@ Deno.serve(async (req) => {
   // these exact bytes, so parsing to JSON first (which re-serializes) breaks it.
   const rawBody = await req.text();
 
+  // Two destinations (see header comment) mean two possible signing secrets
+  // for the same URL -- try the primary one first, then the Connect one
+  // (if configured) before rejecting the request.
   let event: Stripe.Event;
   try {
     event = await stripe.webhooks.constructEventAsync(rawBody, signature, webhookSecret);
-  } catch (err) {
-    return jsonResponse({ error: `Signature verification failed: ${(err as Error).message}` }, 400);
+  } catch (primaryErr) {
+    if (!webhookSecretConnect) {
+      return jsonResponse({ error: `Signature verification failed: ${(primaryErr as Error).message}` }, 400);
+    }
+    try {
+      event = await stripe.webhooks.constructEventAsync(rawBody, signature, webhookSecretConnect);
+    } catch (connectErr) {
+      return jsonResponse({ error: `Signature verification failed: ${(connectErr as Error).message}` }, 400);
+    }
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;

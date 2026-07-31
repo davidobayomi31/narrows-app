@@ -92,6 +92,7 @@ export default function WinterizationRequestCard({ request: r, marinaName, onPai
         {r.boat_type || 'Boat'}{r.boat_length_ft ? ` · ${r.boat_length_ft} ft` : ''}
       </Text>
       <Text style={styles.detail}>{LOCATION_LABEL[r.details?.boat_location] || r.details?.boat_location}</Text>
+      {r.details?.tow_address && <Text style={styles.detail}>{r.details.tow_address}</Text>}
 
       {r.status === 'declined' ? (
         <View style={styles.declinedBadge}>

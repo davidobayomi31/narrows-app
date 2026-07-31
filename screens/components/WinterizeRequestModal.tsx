@@ -18,6 +18,8 @@ import { Colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
 import { friendlyError } from '../../lib/errors';
 import { formatDateYMD } from '../../lib/dateFormat';
+import { verifyAddress, VerifiedAddress } from '../../lib/geocode';
+import { sendPush } from '../../lib/sendPush';
 import DismissKeyboardView from './DismissKeyboardView';
 
 type Props = {
@@ -47,6 +49,10 @@ export default function WinterizeRequestModal({ visible, marinaId, marinaProfile
   const [lengthFt, setLengthFt] = useState('');
   const [alreadyAtMarina, setAlreadyAtMarina] = useState<boolean | null>(null);
   const [needsTow, setNeedsTow] = useState<boolean | null>(null);
+  const [towAddress, setTowAddress] = useState('');
+  const [verifiedAddress, setVerifiedAddress] = useState<VerifiedAddress | null>(null);
+  const [verifyingAddress, setVerifyingAddress] = useState(false);
+  const [addressError, setAddressError] = useState<string | null>(null);
   const [preferredDate, setPreferredDate] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [notes, setNotes] = useState('');
@@ -73,16 +79,41 @@ export default function WinterizeRequestModal({ visible, marinaId, marinaProfile
     boatType != null &&
     hasValidLength &&
     alreadyAtMarina != null &&
-    (alreadyAtMarina === true || needsTow != null);
+    (alreadyAtMarina === true || (needsTow === false || (needsTow === true && verifiedAddress != null)));
 
   function reset() {
     setBoatType(null);
     setLengthFt('');
     setAlreadyAtMarina(null);
     setNeedsTow(null);
+    setTowAddress('');
+    setVerifiedAddress(null);
+    setVerifyingAddress(false);
+    setAddressError(null);
     setPreferredDate(null);
     setShowDatePicker(false);
     setNotes('');
+  }
+
+  function onTowAddressChange(text: string) {
+    setTowAddress(text);
+    // Any edit invalidates a prior verification — the confirmed lat/lng
+    // belongs to the old text, not this one.
+    setVerifiedAddress(null);
+    setAddressError(null);
+  }
+
+  async function handleVerifyAddress() {
+    if (verifyingAddress || !towAddress.trim()) return;
+    setVerifyingAddress(true);
+    setAddressError(null);
+    const result = await verifyAddress(towAddress);
+    setVerifyingAddress(false);
+    if (!result) {
+      setAddressError("Couldn't find that address — check the street number and try again.");
+      return;
+    }
+    setVerifiedAddress(result);
   }
 
   function onDateChange(event: DateTimePickerEvent, date?: Date) {
@@ -119,7 +150,16 @@ export default function WinterizeRequestModal({ visible, marinaId, marinaProfile
       user_id: user.id,
       boat_type: boatType,
       boat_length_ft: parsedLength,
-      details: { boat_location: boatLocation },
+      details: {
+        boat_location: boatLocation,
+        ...(boatLocation === 'needs_tow' && verifiedAddress
+          ? {
+              tow_address: verifiedAddress.formatted,
+              tow_address_lat: verifiedAddress.latitude,
+              tow_address_lng: verifiedAddress.longitude,
+            }
+          : {}),
+      },
       boater_notes: notes.trim() || null,
       start_date: preferredDate ? formatDateYMD(preferredDate) : null,
       quoted_cents: Math.round(estimate * 100),
@@ -134,6 +174,7 @@ export default function WinterizeRequestModal({ visible, marinaId, marinaProfile
         type: 'winterization',
         comment_body: 'New winterization request — open Requests to review.',
       });
+      sendPush(marinaProfileId, 'New winterization request', 'Open Requests to review and set a price.');
     }
 
     setSaving(false);
@@ -221,6 +262,34 @@ export default function WinterizeRequestModal({ visible, marinaId, marinaProfile
                     <Text style={[styles.chipText, needsTow === true && styles.chipTextActive]}>I need a tow</Text>
                   </TouchableOpacity>
                 </View>
+              </>
+            )}
+
+            {needsTow === true && (
+              <>
+                <Text style={styles.label}>Pickup address</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Street address, city"
+                  placeholderTextColor={Colors.muted}
+                  value={towAddress}
+                  onChangeText={onTowAddressChange}
+                  onSubmitEditing={handleVerifyAddress}
+                />
+                {verifiedAddress ? (
+                  <Text style={styles.addressVerified}>✓ {verifiedAddress.formatted}</Text>
+                ) : (
+                  <>
+                    <TouchableOpacity
+                      style={[styles.verifyButton, (!towAddress.trim() || verifyingAddress) && styles.submitButtonDisabled]}
+                      onPress={handleVerifyAddress}
+                      disabled={!towAddress.trim() || verifyingAddress}
+                    >
+                      <Text style={styles.verifyButtonText}>{verifyingAddress ? 'Checking…' : 'Verify address'}</Text>
+                    </TouchableOpacity>
+                    {addressError && <Text style={styles.addressError}>{addressError}</Text>}
+                  </>
+                )}
               </>
             )}
 
@@ -321,6 +390,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   notesInput: { minHeight: 70, textAlignVertical: 'top' },
+
+  verifyButton: { backgroundColor: Colors.surface, borderRadius: 10, paddingVertical: 10, alignItems: 'center', marginTop: 8, borderWidth: 1, borderColor: '#333333' },
+  verifyButtonText: { color: Colors.cream, fontSize: 13, fontWeight: '600' },
+  addressVerified: { color: '#4CAF50', fontSize: 12, marginTop: 8, lineHeight: 16 },
+  addressError: { color: '#FF6B6B', fontSize: 12, marginTop: 8, lineHeight: 16 },
 
   datePickerWrap: { alignItems: 'center', marginTop: 8 },
   datePickerDone: { alignSelf: 'stretch', backgroundColor: Colors.gold, borderRadius: 12, paddingVertical: 12, alignItems: 'center', marginTop: 8 },

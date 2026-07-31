@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,7 @@ import { WINTERIZATION_REQUESTS_LIVE } from '../constants/features';
 import { supabase } from '../lib/supabase';
 import WinterizeRequestModal from './components/WinterizeRequestModal';
 import WinterizationRequestCard from './components/WinterizationRequestCard';
+import ChatModal from './components/ChatModal';
 
 const MARINA_FALLBACK = 'https://images.unsplash.com/photo-1545671913-b89ac1b4ac10?w=1200&q=80';
 const HERO_OVERLAY = ['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.45)', 'rgba(0,0,0,0.92)'] as const;
@@ -44,12 +45,39 @@ export default function MarinaProfileScreen() {
   const [myRequests, setMyRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showWinterize, setShowWinterize] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  const [myUserId, setMyUserId] = useState<string | null>(null);
+  const [unreadMessages, setUnreadMessages] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
       loadMarina();
+      loadUnreadMessages();
     }, [marinaId])
   );
+
+  // a tapped "new message" notification passes openChat -- jump straight
+  // into the thread instead of making the boater find the icon themselves.
+  useEffect(() => {
+    if (route.params?.openChat) {
+      setShowChat(true);
+      navigation.setParams({ openChat: undefined, openChatNonce: undefined });
+    }
+  }, [route.params?.openChatNonce]);
+
+  async function loadUnreadMessages() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    setMyUserId(user.id);
+    const { count } = await supabase
+      .from('messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('marina_id', marinaId)
+      .eq('boater_id', user.id)
+      .neq('sender_id', user.id)
+      .is('read_at', null);
+    setUnreadMessages(count || 0);
+  }
 
   async function loadMarina() {
     const { data: marinaData } = await supabase
@@ -138,6 +166,17 @@ export default function MarinaProfileScreen() {
             <Ionicons name="chevron-back" size={24} color={Colors.cream} />
           </TouchableOpacity>
 
+          {marina.profile_id && (
+            <TouchableOpacity style={styles.messageButton} onPress={() => setShowChat(true)} hitSlop={10}>
+              <Ionicons name="paper-plane-outline" size={20} color={Colors.cream} />
+              {unreadMessages > 0 && (
+                <View style={styles.messageBadge}>
+                  <Text style={styles.messageBadgeText}>{unreadMessages > 9 ? '9+' : unreadMessages}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
+
           <View style={styles.heroContent}>
             <View style={styles.nameRow}>
               <Text style={styles.marinaName}>{marina.name}</Text>
@@ -220,6 +259,18 @@ export default function MarinaProfileScreen() {
         onClose={() => setShowWinterize(false)}
         onSubmitted={() => { setShowWinterize(false); loadMarina(); }}
       />
+
+      {myUserId && (
+        <ChatModal
+          visible={showChat}
+          marinaId={marina.id}
+          boaterId={myUserId}
+          otherPartyUserId={marina.profile_id ?? null}
+          headerTitle={marina.name}
+          onClose={() => setShowChat(false)}
+          onRead={loadUnreadMessages}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -252,6 +303,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  messageButton: {
+    position: 'absolute',
+    top: 56,
+    right: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  messageBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: Colors.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  messageBadgeText: { color: Colors.black, fontSize: 10, fontWeight: '700' },
   heroContent: {
     padding: 20,
   },
