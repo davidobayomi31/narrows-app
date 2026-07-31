@@ -8,6 +8,8 @@ export type OwnedMarina = {
   id: string;
   name: string;
   winterization_enabled: boolean;
+  stripe_account_id: string | null;
+  stripe_charges_enabled: boolean;
 };
 
 type AccountContextValue = {
@@ -51,7 +53,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         const { data: ownedMarina } = await withTimeout(
           supabase
             .from('marinas')
-            .select('id, name, winterization_enabled')
+            .select('id, name, winterization_enabled, stripe_account_id, stripe_charges_enabled')
             .eq('profile_id', user.id)
             .maybeSingle()
         );

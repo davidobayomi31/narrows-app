@@ -9,6 +9,8 @@ import { Ionicons, MaterialCommunityIcons} from '@expo/vector-icons';
 import { getWeather, Weather} from '../lib/weather';
 import { Marina, loadHomeData, getCachedHomeData } from '../lib/homeData';
 import { useAccount } from '../contexts/AccountContext';
+import { supabase } from '../lib/supabase';
+import { friendlyError } from '../lib/errors';
 import WindCompass from './components/WindCompass';
 
 // shown behind the marina name if a marina has no image_url yet
@@ -68,7 +70,8 @@ export default function Homepage(){
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   // marina: null until an admin approves + links the marina application
-  const { accountType, marina: ownedMarina, loading: accountLoading } = useAccount();
+  const { accountType, marina: ownedMarina, loading: accountLoading, refreshAccount } = useAccount();
+  const [connectingStripe, setConnectingStripe] = useState(false);
 
     // Splash usually already prefetched this data in parallel with its own
     // logo display — if so, use it immediately with no loader. Otherwise
@@ -104,6 +107,30 @@ export default function Homepage(){
       }
     }, [marina])
   );
+
+  // a marina owner finishing (or bailing out of) Stripe onboarding lands back
+  // here via the system browser, not a deep link — re-check status on focus
+  // so the "Connect with Stripe" banner updates without a manual app relaunch.
+  useFocusEffect(
+    useCallback(() => {
+      if (accountType === 'marina') refreshAccount();
+    }, [accountType, refreshAccount])
+  );
+
+  async function connectStripe() {
+    setConnectingStripe(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('create-connected-account');
+      if (error || !data?.url) {
+        throw new Error(error?.message || 'Could not start Stripe setup');
+      }
+      await Linking.openURL(data.url);
+    } catch (err) {
+      Alert.alert('Could not connect Stripe', friendlyError(err as Error));
+    } finally {
+      setConnectingStripe(false);
+    }
+  }
 
   // pull-to-refresh: force a fresh fetch of marina + weather
   async function onRefresh() {
@@ -168,6 +195,29 @@ export default function Homepage(){
               Your marina is waiting on approval — we'll notify you once it's live.
             </Text>
           </View>
+        )}
+
+        {/* Approved marina, but no working Stripe payout yet — boaters can't
+            actually pay a deposit until this is done. */}
+        {!accountLoading && accountType === 'marina' && ownedMarina && !ownedMarina.stripe_charges_enabled && (
+          <TouchableOpacity
+            style={styles.stripeBanner}
+            onPress={connectStripe}
+            disabled={connectingStripe}
+          >
+            <View style={styles.stripeBannerIcon}>
+              <Ionicons name="card-outline" size={18} color={Colors.background} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.stripeBannerTitle}>
+                {connectingStripe ? 'Opening Stripe…' : 'Connect with Stripe'}
+              </Text>
+              <Text style={styles.stripeBannerSubtitle}>
+                Set up payouts so boaters can pay deposits directly to you.
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={Colors.muted} />
+          </TouchableOpacity>
         )}
 
         {/* Water alert — only shows when a marina has an active alert */}
@@ -457,6 +507,36 @@ const styles = StyleSheet.create({
     color: Colors.gold,
     fontSize: 13,
     fontWeight: '600',
+  },
+
+  // "Connect with Stripe" call-to-action — a tappable card, unlike the
+  // text-only alertBanner pill above.
+  stripeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 16,
+  },
+  stripeBannerIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stripeBannerTitle: {
+    color: Colors.cream,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  stripeBannerSubtitle: {
+    color: Colors.muted,
+    fontSize: 12,
+    marginTop: 2,
   },
 
   // Cards — borderless, the surface contrast does the work
