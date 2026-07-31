@@ -19,9 +19,27 @@ alter table public.marinas
 alter table public.marinas
   add column if not exists stripe_charges_enabled boolean not null default false;
 
--- `marinas` is publicly readable (MarinaProfileScreen does `select('*')` for
--- any boater viewing a profile) — these two columns are Stripe account
--- internals, not profile content, so pull them out of that blanket grant.
--- Only the service-role client (which the Edge Functions use) can still read
--- them; no app code reads these columns today, so nothing else changes.
-revoke select (stripe_account_id, stripe_charges_enabled) on public.marinas from anon, authenticated;
+-- THE GRANT TRAP (see HANDOFF.md "Gotchas"), service_role edition. Verified
+-- against the live DB on 2026-07-29: service_role had only REFERENCES/TRIGGER/
+-- TRUNCATE on `marinas` and NOTHING AT ALL on `bookings`/`marina_listings` —
+-- marina_bookings.sql section 5 grants only to anon/authenticated. So the Edge
+-- Functions' admin client failed with "permission denied for table marinas" on
+-- its very first select; RLS was never even reached.
+--
+-- `bookings` matters just as much: create-payment-intent creates the Stripe
+-- PaymentIntent BEFORE writing payment_intent_id back, so without UPDATE here
+-- a payment attempt would leave a real PaymentIntent at Stripe with no record
+-- of it in the database.
+grant select, insert, update, delete on public.marinas         to service_role;
+grant select, insert, update, delete on public.bookings        to service_role;
+grant select, insert, update, delete on public.marina_listings to service_role;
+
+-- NOTE — stripe_account_id and stripe_charges_enabled are currently readable by
+-- any client, because `marinas` is publicly readable (MarinaProfileScreen does
+-- `select('*')`). A column-level `revoke select (...) from anon, authenticated`
+-- was tried here and removed: it's brittle against the blanket table grant
+-- Supabase re-applies, and it silently broke normal marina reads. Low severity
+-- for now (an `acct_...` id is an identifier, not a credential, and only
+-- service_role can WRITE these columns). The real fix, when it matters, is to
+-- move both columns to their own `marina_stripe_accounts` table with its own
+-- RLS policy rather than fighting column-level grants on a public table.

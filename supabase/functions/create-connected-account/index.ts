@@ -112,8 +112,34 @@ Deno.serve(async (req) => {
     }
   }
 
-  // 4) Account Links are single-use and short-lived — always mint a fresh
-  //    one rather than trying to cache it.
+  // 4) Re-read the account from Stripe and cache charges_enabled locally.
+  //    Stripe is the source of truth; marinas.stripe_charges_enabled is only a
+  //    cache so create-payment-intent doesn't need a Stripe round-trip per
+  //    booking. Syncing here means an owner who returns to finish onboarding
+  //    updates their own status just by hitting this endpoint. The
+  //    account.updated webhook (not built yet) is still what will keep this
+  //    fresh when Stripe changes the status on its own, with no one calling us.
+  let chargesEnabled = false;
+  try {
+    const account = await stripe.accounts.retrieve(accountId);
+    chargesEnabled = account.charges_enabled;
+  } catch (err) {
+    return jsonResponse({ error: `Stripe: ${(err as Error).message}` }, 502);
+  }
+
+  const { error: syncError } = await admin
+    .from('marinas')
+    .update({ stripe_charges_enabled: chargesEnabled })
+    .eq('id', marina.id);
+
+  if (syncError) {
+    return jsonResponse({ error: syncError.message }, 500);
+  }
+
+  // 5) Account Links are single-use and short-lived — always mint a fresh
+  //    one rather than trying to cache it. Still returned even when onboarding
+  //    is already complete: Stripe shows the account's own management view, so
+  //    it doubles as an "update my payout details" link.
   let accountLink;
   try {
     accountLink = await stripe.accountLinks.create({
@@ -126,5 +152,5 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: `Stripe: ${(err as Error).message}` }, 502);
   }
 
-  return jsonResponse({ url: accountLink.url, accountId });
+  return jsonResponse({ url: accountLink.url, accountId, chargesEnabled });
 });
