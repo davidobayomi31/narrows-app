@@ -99,7 +99,7 @@ export default function App(){
 
   return (
     <ErrorBoundary>
-    <StripeProvider publishableKey={STRIPE_PUBLISHABLE_KEY}>
+    <StripeProvider publishableKey={STRIPE_PUBLISHABLE_KEY} merchantIdentifier="merchant.site.narrows.app">
     <UnitsProvider>
     <AccountProvider>
     <TripProvider>

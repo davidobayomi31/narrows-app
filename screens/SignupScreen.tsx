@@ -41,6 +41,9 @@ export default function SignupScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  // masking flips on FOCUS, not on text length — see LoginScreen for why
+  const [passwordFocused, setPasswordFocused] = useState(false);
+  const [confirmPasswordFocused, setConfirmPasswordFocused] = useState(false);
 
   // holds error messages for each field
   const [firstNameError, setFirstNameError] = useState('');
@@ -242,9 +245,11 @@ if (lastName.trim().length < 1) {
             style={[styles.input, styles.passwordInput, passwordError ? styles.inputError : null]}
             placeholder="Password"
             placeholderTextColor="#8899AA"
-            secureTextEntry={!showPassword && password.length > 0}
+            secureTextEntry={!showPassword && (passwordFocused || password.length > 0)}
             value={password}
             onChangeText={setPassword}
+            onFocus={() => setPasswordFocused(true)}
+            onBlur={() => setPasswordFocused(false)}
           />
           <TouchableOpacity
             style={styles.eyeButton}
@@ -260,9 +265,11 @@ if (lastName.trim().length < 1) {
             style={[styles.input, styles.passwordInput, confirmPasswordError ? styles.inputError : null]}
             placeholder="Confirm Password"
             placeholderTextColor="#8899AA"
-            secureTextEntry={!showConfirmPassword && confirmPassword.length > 0}
+            secureTextEntry={!showConfirmPassword && (confirmPasswordFocused || confirmPassword.length > 0)}
             value={confirmPassword}
             onChangeText={setConfirmPassword}
+            onFocus={() => setConfirmPasswordFocused(true)}
+            onBlur={() => setConfirmPasswordFocused(false)}
           />
           <TouchableOpacity
             style={styles.eyeButton}

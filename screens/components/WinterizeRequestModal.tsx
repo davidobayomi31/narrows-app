@@ -13,6 +13,7 @@ import {
   Alert,
 } from 'react-native';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
 import { friendlyError } from '../../lib/errors';
@@ -38,6 +39,9 @@ function estimatePrice(lengthFt: number): number {
 }
 
 export default function WinterizeRequestModal({ visible, marinaId, marinaProfileId, onClose, onSubmitted }: Props) {
+  // insets.bottom can report 0 inside a Modal, so guarantee a minimum —
+  // see ShareSheet.tsx / CommentsModal.tsx for the same pattern.
+  const insets = useSafeAreaInsets();
   const [listingId, setListingId] = useState<string | null>(null);
   const [boatType, setBoatType] = useState<string | null>(null);
   const [lengthFt, setLengthFt] = useState('');
@@ -152,7 +156,10 @@ export default function WinterizeRequestModal({ visible, marinaId, marinaProfile
         <KeyboardAvoidingView style={styles.sheet} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.handle} />
           <DismissKeyboardView style={{ flex: 0 }}>
-          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 20) + 20 }]}
+          >
             <Text style={styles.title}>Winterize My Boat</Text>
             <Text style={styles.subtitle}>
               Tell us about your boat — the marina will confirm the final price and date.

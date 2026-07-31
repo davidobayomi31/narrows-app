@@ -8,6 +8,7 @@ import { supabase } from '../../lib/supabase';
 const STEPS = [
   { key: 'pending', label: 'Requested' },
   { key: 'approved', label: 'Approved' },
+  { key: 'paid', label: 'Deposit Paid' },
   { key: 'in_progress', label: 'In Progress' },
   { key: 'completed', label: 'Completed' },
 ];
@@ -42,7 +43,7 @@ export default function WinterizationRequestCard({ request: r, marinaName, onPai
   const [paying, setPaying] = useState(false);
 
   const amountCents = r.deposit_cents ?? r.quoted_cents;
-  const showPayButton = r.status === 'approved' && !r.payment_intent_id && amountCents > 0;
+  const showPayButton = r.status === 'approved' && amountCents > 0;
 
   async function handlePay() {
     setPaying(true);
@@ -57,6 +58,12 @@ export default function WinterizationRequestCard({ request: r, marinaName, onPai
       const { error: sheetError } = await initPaymentSheet({
         merchantDisplayName: 'Narrows',
         paymentIntentClientSecret: data.client_secret,
+        // Shows Apple Pay as an option in the sheet automatically when the
+        // device/card setup supports it — no separate Apple Pay button needed.
+        // Requires the merchant.site.narrows.app Merchant ID to be registered
+        // in Apple Developer and a native rebuild to pick up the entitlement
+        // (see app.json's stripe-react-native plugin config).
+        applePay: { merchantCountryCode: 'CA' },
       });
       if (sheetError) throw new Error(sheetError.message);
 
@@ -109,7 +116,7 @@ export default function WinterizationRequestCard({ request: r, marinaName, onPai
         </View>
       )}
 
-      {r.status === 'approved' || r.status === 'in_progress' || r.status === 'completed' ? (
+      {r.status === 'approved' || r.status === 'paid' || r.status === 'in_progress' || r.status === 'completed' ? (
         <View style={styles.confirmedBox}>
           {r.quoted_cents != null && <Text style={styles.confirmedText}>Confirmed price: ${(r.quoted_cents / 100).toFixed(0)}</Text>}
           {r.start_date && <Text style={styles.confirmedText}>Scheduled: {r.start_date}</Text>}

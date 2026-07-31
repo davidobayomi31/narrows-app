@@ -21,6 +21,11 @@ export default function LoginScreen() {
 
   // controls whether password characters are visible
   const [showPassword, setShowPassword] = useState(false);
+  // masking flips on FOCUS, not on text length — flipping secureTextEntry
+  // mid-typing (e.g. on the 0->1 character transition) makes iOS's native
+  // field drop whatever was just typed, which swallowed the first character
+  // of the password. Flipping on focus happens before any typing starts.
+  const [passwordFocused, setPasswordFocused] = useState(false);
 
   // Sign in with Apple is only available on iOS 13+ hardware
   const [appleAvailable, setAppleAvailable] = useState(false);
@@ -119,9 +124,11 @@ export default function LoginScreen() {
             style={[styles.input, styles.passwordInput, passwordError ? styles.inputError : null]}
             placeholder="Password"
             placeholderTextColor="#8899AA"
-            secureTextEntry={!showPassword && password.length > 0}
+            secureTextEntry={!showPassword && (passwordFocused || password.length > 0)}
             value={password}
             onChangeText={setPassword}
+            onFocus={() => setPasswordFocused(true)}
+            onBlur={() => setPasswordFocused(false)}
           />
           {/* anchor = locked, unlocked = password visible */}
           <TouchableOpacity
