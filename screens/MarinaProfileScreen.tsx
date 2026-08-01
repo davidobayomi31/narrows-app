@@ -20,8 +20,10 @@ import { Colors } from '../constants/colors';
 import { WINTERIZATION_REQUESTS_LIVE } from '../constants/features';
 import { supabase } from '../lib/supabase';
 import WinterizeRequestModal from './components/WinterizeRequestModal';
+import BookingRequestModal from './components/BookingRequestModal';
 import WinterizationRequestCard from './components/WinterizationRequestCard';
 import ChatModal from './components/ChatModal';
+import { BOOKING_TYPES, ListingType } from '../lib/bookingTypes';
 
 const MARINA_FALLBACK = 'https://images.unsplash.com/photo-1545671913-b89ac1b4ac10?w=1200&q=80';
 const HERO_OVERLAY = ['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.45)', 'rgba(0,0,0,0.92)'] as const;
@@ -45,6 +47,9 @@ export default function MarinaProfileScreen() {
   const [myRequests, setMyRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showWinterize, setShowWinterize] = useState(false);
+  // which generalized request-flow modal is open (slip/mooring/storage), if any
+  const [bookingType, setBookingType] = useState<ListingType | null>(null);
+  const [listingTypes, setListingTypes] = useState<string[]>([]);
   const [showChat, setShowChat] = useState(false);
   const [myUserId, setMyUserId] = useState<string | null>(null);
   const [unreadMessages, setUnreadMessages] = useState(0);
@@ -98,17 +103,24 @@ export default function MarinaProfileScreen() {
       }
     }
 
+    // which booking types this marina actually offers — drives which "Book X"
+    // buttons render. A marina with no seadoo listing shows no rental button.
+    const { data: listingRows } = await supabase
+      .from('marina_listings')
+      .select('listing_type')
+      .eq('marina_id', marinaId)
+      .eq('active', true);
+    setListingTypes([...new Set((listingRows ?? []).map((l) => l.listing_type))]);
+
     if (WINTERIZATION_REQUESTS_LIVE) {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        // !inner filters on the joined table's column — only bookings whose
-        // listing is a winterization listing come back.
+        // every booking type now — the joined listing_type labels each card.
         const { data: reqData } = await supabase
           .from('bookings')
-          .select('*, marina_listings!inner(listing_type)')
+          .select('*, marina_listings!inner(listing_type, name)')
           .eq('marina_id', marinaId)
           .eq('user_id', user.id)
-          .eq('marina_listings.listing_type', 'winterization')
           .order('created_at', { ascending: false });
         setMyRequests(reqData || []);
       }
@@ -208,13 +220,28 @@ export default function MarinaProfileScreen() {
                 <Text style={styles.winterizeButtonText}>Winterize My Boat</Text>
               </TouchableOpacity>
             )}
+
+            {/* one "Book X" button per request-flow type this marina offers */}
+            {WINTERIZATION_REQUESTS_LIVE &&
+              (Object.keys(BOOKING_TYPES) as ListingType[])
+                .filter((t) => BOOKING_TYPES[t].requestFlow && listingTypes.includes(t))
+                .map((t) => (
+                  <TouchableOpacity
+                    key={t}
+                    style={styles.winterizeButton}
+                    onPress={() => setBookingType(t)}
+                  >
+                    <Ionicons name={BOOKING_TYPES[t].icon} size={16} color={Colors.cream} />
+                    <Text style={styles.winterizeButtonText}>{BOOKING_TYPES[t].buttonText}</Text>
+                  </TouchableOpacity>
+                ))}
           </View>
         </ImageBackground>
 
         {myRequests.length > 0 && (
           <View style={styles.requestsSection}>
             <Text style={styles.sectionTitle}>
-              Your Winterization Request{myRequests.length > 1 ? 's' : ''}
+              Your Request{myRequests.length > 1 ? 's' : ''}
             </Text>
             {myRequests.map((r) => (
               <WinterizationRequestCard key={r.id} request={r} onPaid={loadMarina} />
@@ -259,6 +286,17 @@ export default function MarinaProfileScreen() {
         onClose={() => setShowWinterize(false)}
         onSubmitted={() => { setShowWinterize(false); loadMarina(); }}
       />
+
+      {bookingType && (
+        <BookingRequestModal
+          visible={bookingType != null}
+          marinaId={marina.id}
+          marinaProfileId={marina.profile_id ?? null}
+          listingType={bookingType}
+          onClose={() => setBookingType(null)}
+          onSubmitted={() => { setBookingType(null); loadMarina(); }}
+        />
+      )}
 
       {myUserId && (
         <ChatModal

@@ -23,13 +23,11 @@ export default function MyWinterizationRequestsScreen() {
       return;
     }
 
-    // !inner filters on the joined table's column — only bookings whose
-    // listing is a winterization listing come back.
+    // every booking type — the joined listing_type labels each card.
     const { data: reqData } = await supabase
       .from('bookings')
-      .select('*, marina_listings!inner(listing_type)')
+      .select('*, marina_listings!inner(listing_type, name)')
       .eq('user_id', user.id)
-      .eq('marina_listings.listing_type', 'winterization')
       .order('created_at', { ascending: false });
 
     const { data: marinasData } = await supabase.from('marinas').select('id, name');
@@ -47,7 +45,7 @@ export default function MyWinterizationRequestsScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         {!loading && requests.length === 0 && (
           <Text style={styles.empty}>
-            No winterization requests yet. Visit a marina's profile to send one.
+            No requests yet. Visit a marina's profile to send one.
           </Text>
         )}
 

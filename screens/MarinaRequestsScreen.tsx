@@ -22,6 +22,7 @@ import { friendlyError } from '../lib/errors';
 import { formatDateYMD, parseDateYMD } from '../lib/dateFormat';
 import { sendPush } from '../lib/sendPush';
 import { useAccount } from '../contexts/AccountContext';
+import { typeLabel } from '../lib/bookingTypes';
 import DismissKeyboardView from './components/DismissKeyboardView';
 
 const FILTERS = ['All', 'Requested', 'Approved', 'In Progress', 'Completed', 'Declined'];
@@ -107,13 +108,12 @@ export default function MarinaRequestsScreen() {
 
   async function loadRequests() {
     if (!marina?.id) return;
-    // !inner filters on the joined table's column — only bookings whose
-    // listing is a winterization listing come back.
+    // one inbox for every booking type — the joined listing_type labels each
+    // card (winterization, slip, mooring, storage, …).
     const { data: reqData } = await supabase
       .from('bookings')
-      .select('*, marina_listings!inner(listing_type)')
+      .select('*, marina_listings!inner(listing_type, name)')
       .eq('marina_id', marina.id)
-      .eq('marina_listings.listing_type', 'winterization')
       .order('created_at', { ascending: false });
 
     const { data: profilesData } = await supabase
@@ -139,12 +139,21 @@ export default function MarinaRequestsScreen() {
     if (event.type !== 'dismissed' && date) setDateInput(date);
   }
 
-  async function notifyBoater(userId: string, message: string, title = 'Winterization update') {
+  // 'winterization' keeps its historical notification type; every other
+  // booking type uses 'booking' (both are in the notifications type CHECK).
+  function selectedType(): string {
+    return selected?.marina_listings?.listing_type ?? 'winterization';
+  }
+  function selectedIsWinterization(): boolean {
+    return selectedType() === 'winterization';
+  }
+
+  async function notifyBoater(userId: string, message: string, title: string, notifType: string) {
     const { data: { user } } = await supabase.auth.getUser();
     await supabase.from('notifications').insert({
       recipient_id: userId,
       actor_id: user?.id,
-      type: 'winterization',
+      type: notifType === 'winterization' ? 'winterization' : 'booking',
       comment_body: message,
     });
     sendPush(userId, title, message);
@@ -152,19 +161,28 @@ export default function MarinaRequestsScreen() {
 
   async function approve() {
     if (!selected) return;
+    const isWinterization = selectedIsWinterization();
+    const label = typeLabel(selectedType()).toLowerCase();
     const price = parseFloat(priceInput);
     if (!priceInput.trim() || Number.isNaN(price)) {
       Alert.alert('Price needed', 'Enter the confirmed price before approving.');
       return;
     }
-    if (!dateInput) {
+    // winterization: the marina picks the service date. Slip-like bookings:
+    // the boater already chose arrival/departure — approving confirms them,
+    // no date to set.
+    if (isWinterization && !dateInput) {
       Alert.alert('Date needed', 'Pick a scheduled date before approving.');
       return;
     }
     setSaving(true);
     const { error } = await supabase
       .from('bookings')
-      .update({ status: 'approved', quoted_cents: Math.round(price * 100), start_date: formatDateYMD(dateInput) })
+      .update({
+        status: 'approved',
+        quoted_cents: Math.round(price * 100),
+        ...(isWinterization && dateInput ? { start_date: formatDateYMD(dateInput) } : {}),
+      })
       .eq('id', selected.id);
     setSaving(false);
     if (error) {
@@ -173,8 +191,11 @@ export default function MarinaRequestsScreen() {
     }
     await notifyBoater(
       selected.user_id,
-      `Your winterization request was approved — $${price} on ${formatDateYMD(dateInput)}.`,
-      'Request approved'
+      isWinterization && dateInput
+        ? `Your winterization request was approved — $${price} on ${formatDateYMD(dateInput)}.`
+        : `Your ${label} request was approved — $${price}.`,
+      'Request approved',
+      selectedType()
     );
     setSelected(null);
     loadRequests();
@@ -198,7 +219,12 @@ export default function MarinaRequestsScreen() {
             Alert.alert('Could not decline', friendlyError(error));
             return;
           }
-          await notifyBoater(selected.user_id, 'Your winterization request was declined.', 'Request declined');
+          await notifyBoater(
+            selected.user_id,
+            `Your ${typeLabel(selectedType()).toLowerCase()} request was declined.`,
+            'Request declined',
+            selectedType()
+          );
           setSelected(null);
           loadRequests();
         },
@@ -218,12 +244,15 @@ export default function MarinaRequestsScreen() {
       Alert.alert('Could not update', friendlyError(error));
       return;
     }
+    const isWinterization = selectedIsWinterization();
+    const label = typeLabel(selectedType());
     await notifyBoater(
       selected.user_id,
       next === 'in_progress'
-        ? 'Your boat winterization has started.'
-        : 'Your boat has been winterized — all done!',
-      next === 'in_progress' ? 'Winterization started' : 'Winterization complete'
+        ? (isWinterization ? 'Your boat winterization has started.' : `Your ${label.toLowerCase()} booking is underway.`)
+        : (isWinterization ? 'Your boat has been winterized — all done!' : `Your ${label.toLowerCase()} booking is complete.`),
+      next === 'in_progress' ? `${label} started` : `${label} complete`,
+      selectedType()
     );
     setSelected(null);
     loadRequests();
@@ -232,8 +261,10 @@ export default function MarinaRequestsScreen() {
   const visible =
     activeFilter === 'All' ? requests : requests.filter((r) => r.status === FILTER_STATUS[activeFilter]);
 
-  // still under manual review, or approved but not yet enabled for requests
-  if (!accountLoading && (!marina || !marina.winterization_enabled)) {
+  // still under manual review — no marina row linked to this account yet.
+  // (Previously also required winterization_enabled, but a marina offering
+  // only slips/storage still needs its inbox.)
+  if (!accountLoading && !marina) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.pendingWrap}>
@@ -241,7 +272,7 @@ export default function MarinaRequestsScreen() {
           <Text style={styles.pendingTitle}>Application under review</Text>
           <Text style={styles.pendingText}>
             We manually review every marina before it goes live. We'll notify you once your
-            marina is approved and winterization requests start coming in.
+            marina is approved and booking requests start coming in.
           </Text>
         </View>
       </SafeAreaView>
@@ -290,10 +321,16 @@ export default function MarinaRequestsScreen() {
                   <Text style={styles.badgeText}>{STATUS_LABEL[r.status]}</Text>
                 </View>
               </View>
+              <Text style={styles.cardType}>{typeLabel(r.marina_listings?.listing_type)}</Text>
               <Text style={styles.cardDetail}>
                 {r.boat_type || 'Boat'}{r.boat_length_ft ? ` · ${r.boat_length_ft} ft` : ''}
               </Text>
-              {r.status === 'pending' && r.start_date && <Text style={styles.cardDetail}>Preferred: {r.start_date}</Text>}
+              {r.status === 'pending' && r.start_date && (
+                <Text style={styles.cardDetail}>
+                  {r.marina_listings?.listing_type === 'winterization' ? 'Preferred: ' : ''}
+                  {r.start_date}{r.end_date ? ` → ${r.end_date}` : ''}
+                </Text>
+              )}
               <Text style={styles.cardTime}>{timeAgo(r.created_at)}</Text>
             </TouchableOpacity>
           );
@@ -316,16 +353,30 @@ export default function MarinaRequestsScreen() {
                     <Text style={styles.badgeText}>{STATUS_LABEL[selected.status]}</Text>
                   </View>
 
+                  <DetailRow label="Type" value={typeLabel(selected.marina_listings?.listing_type)} />
+                  {selected.marina_listings?.listing_type !== 'winterization' && selected.marina_listings?.name ? (
+                    <DetailRow label="Listing" value={selected.marina_listings.name} />
+                  ) : null}
                   <DetailRow label="Boat" value={`${selected.boat_type || '—'}${selected.boat_length_ft ? ` · ${selected.boat_length_ft} ft` : ''}`} />
-                  <DetailRow label="Location" value={LOCATION_LABEL[selected.details?.boat_location] || selected.details?.boat_location || '—'} />
+                  {selectedIsWinterization() && (
+                    <DetailRow label="Location" value={LOCATION_LABEL[selected.details?.boat_location] || selected.details?.boat_location || '—'} />
+                  )}
                   {selected.details?.tow_address ? (
                     <DetailRow label="Tow pickup address" value={selected.details.tow_address} />
+                  ) : null}
+                  {!selectedIsWinterization() && selected.start_date ? (
+                    <DetailRow
+                      label="Dates"
+                      value={`${selected.start_date}${selected.end_date ? ` → ${selected.end_date}` : ''}`}
+                    />
                   ) : null}
                   {selected.boater_notes ? <DetailRow label="Logistics notes" value={selected.boater_notes} /> : null}
 
                   {selected.status === 'pending' && (
                     <>
-                      <DetailRow label="Preferred date" value={selected.start_date || 'No preference'} />
+                      {selectedIsWinterization() && (
+                        <DetailRow label="Preferred date" value={selected.start_date || 'No preference'} />
+                      )}
                       {selected.quoted_cents != null && (
                         <DetailRow label="Boater's estimate" value={`$${(selected.quoted_cents / 100).toFixed(0)} (approximate)`} />
                       )}
@@ -339,29 +390,36 @@ export default function MarinaRequestsScreen() {
                         value={priceInput}
                         onChangeText={setPriceInput}
                       />
-                      <Text style={styles.inputLabel}>Scheduled date</Text>
-                      <TouchableOpacity style={styles.input} onPress={() => setShowDatePicker(true)}>
-                        <Text style={{ color: dateInput ? Colors.cream : Colors.muted, fontSize: 15 }}>
-                          {dateInput ? formatDateYMD(dateInput) : 'Select a date'}
-                        </Text>
-                      </TouchableOpacity>
+                      {/* winterization: marina picks the service date. Slip-like
+                          bookings already carry the boater's dates — approving
+                          confirms them as-is. */}
+                      {selectedIsWinterization() && (
+                        <>
+                          <Text style={styles.inputLabel}>Scheduled date</Text>
+                          <TouchableOpacity style={styles.input} onPress={() => setShowDatePicker(true)}>
+                            <Text style={{ color: dateInput ? Colors.cream : Colors.muted, fontSize: 15 }}>
+                              {dateInput ? formatDateYMD(dateInput) : 'Select a date'}
+                            </Text>
+                          </TouchableOpacity>
 
-                      {showDatePicker && (
-                        <View style={styles.datePickerWrap}>
-                          <DateTimePicker
-                            value={dateInput ?? new Date()}
-                            mode="date"
-                            minimumDate={new Date()}
-                            display={Platform.OS === 'ios' ? 'inline' : 'default'}
-                            onChange={onDateChange}
-                            themeVariant="dark"
-                          />
-                          {Platform.OS === 'ios' && (
-                            <TouchableOpacity style={styles.datePickerDone} onPress={() => setShowDatePicker(false)}>
-                              <Text style={styles.datePickerDoneText}>Done</Text>
-                            </TouchableOpacity>
+                          {showDatePicker && (
+                            <View style={styles.datePickerWrap}>
+                              <DateTimePicker
+                                value={dateInput ?? new Date()}
+                                mode="date"
+                                minimumDate={new Date()}
+                                display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                                onChange={onDateChange}
+                                themeVariant="dark"
+                              />
+                              {Platform.OS === 'ios' && (
+                                <TouchableOpacity style={styles.datePickerDone} onPress={() => setShowDatePicker(false)}>
+                                  <Text style={styles.datePickerDoneText}>Done</Text>
+                                </TouchableOpacity>
+                              )}
+                            </View>
                           )}
-                        </View>
+                        </>
                       )}
                       <View style={styles.actionRow}>
                         <TouchableOpacity style={styles.declineBtn} onPress={confirmDecline} disabled={saving}>
@@ -377,7 +435,7 @@ export default function MarinaRequestsScreen() {
                   {(selected.status === 'approved' || selected.status === 'paid') && (
                     <>
                       <DetailRow label="Confirmed price" value={`$${(selected.quoted_cents / 100).toFixed(0)}`} />
-                      <DetailRow label="Scheduled date" value={selected.start_date} />
+                      {selectedIsWinterization() && <DetailRow label="Scheduled date" value={selected.start_date} />}
                       {selected.status === 'paid' && (
                         <DetailRow
                           label="Deposit"
@@ -467,6 +525,7 @@ const styles = StyleSheet.create({
   card: { backgroundColor: Colors.surface, borderRadius: 14, padding: 14, marginBottom: 10 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
   cardName: { color: Colors.cream, fontSize: 15, fontWeight: '700' },
+  cardType: { color: Colors.gold, fontSize: 11, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 2 },
   cardDetail: { color: Colors.muted, fontSize: 13, marginBottom: 2 },
   cardTime: { color: Colors.muted, fontSize: 11, marginTop: 4 },
 

@@ -16,6 +16,9 @@
 -- uses, including 'message' for the new boater<->marina DM feature.
 -- ============================================================================
 
+-- 'booking' (added 2026-07-31) covers generalized booking requests — slip,
+-- mooring, storage — from the A1 generalization; 'winterization' stays its
+-- own type for existing rows and the dedicated winterize flow.
 alter table public.notifications drop constraint if exists notifications_type_check;
 alter table public.notifications add constraint notifications_type_check
-  check (type = any (array['like'::text, 'comment'::text, 'winterization'::text, 'message'::text]));
+  check (type = any (array['like'::text, 'comment'::text, 'winterization'::text, 'message'::text, 'booking'::text]));

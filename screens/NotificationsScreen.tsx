@@ -50,11 +50,11 @@ export default function NotificationsScreen() {
   function openNotification(item: any) {
     if (item.type === 'message') {
       openMessage(item);
-    } else if (item.type !== 'winterization') {
+    } else if (item.type !== 'winterization' && item.type !== 'booking') {
       openPost(item);
     }
-    // 'winterization' notifications have nowhere dedicated to deep-link to
-    // yet (they're read from the Requests tab / MyWinterizationRequests) --
+    // 'winterization'/'booking' notifications have nowhere dedicated to
+    // deep-link to yet (they're read from the Requests tab / My Requests) --
     // tapping just marks it read, which already happens on screen load.
   }
 
@@ -133,6 +133,8 @@ export default function NotificationsScreen() {
                   <MaterialCommunityIcons name="anchor" size={18} color={Colors.gold} />
                 ) : item.type === 'winterization' ? (
                   <Ionicons name="snow" size={16} color={Colors.gold} />
+                ) : item.type === 'booking' ? (
+                  <Ionicons name="boat" size={16} color={Colors.gold} />
                 ) : item.type === 'message' ? (
                   <Ionicons name="paper-plane" size={16} color={Colors.gold} />
                 ) : (
@@ -141,7 +143,7 @@ export default function NotificationsScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.text}>
-                  {item.type === 'winterization' ? (
+                  {item.type === 'winterization' || item.type === 'booking' ? (
                     item.comment_body
                   ) : item.type === 'message' ? (
                     <>

@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useStripe } from '@stripe/stripe-react-native';
 import { Colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
+import { typeLabel } from '../../lib/bookingTypes';
 
 const STEPS = [
   { key: 'pending', label: 'Requested' },
@@ -85,14 +86,32 @@ export default function WinterizationRequestCard({ request: r, marinaName, onPai
     }
   }
 
+  // joined in by the screens' queries; older call sites without the join
+  // just fall back to the winterization-style layout.
+  const bookingType = r.marina_listings?.listing_type ?? 'winterization';
+  const isWinterization = bookingType === 'winterization';
+
   return (
     <View style={styles.card}>
+      <View style={styles.typeTag}>
+        <Text style={styles.typeTagText}>{typeLabel(bookingType)}</Text>
+      </View>
       {marinaName && <Text style={styles.marinaName}>{marinaName}</Text>}
       <Text style={styles.detail}>
         {r.boat_type || 'Boat'}{r.boat_length_ft ? ` · ${r.boat_length_ft} ft` : ''}
       </Text>
-      <Text style={styles.detail}>{LOCATION_LABEL[r.details?.boat_location] || r.details?.boat_location}</Text>
-      {r.details?.tow_address && <Text style={styles.detail}>{r.details.tow_address}</Text>}
+      {isWinterization ? (
+        <>
+          <Text style={styles.detail}>{LOCATION_LABEL[r.details?.boat_location] || r.details?.boat_location}</Text>
+          {r.details?.tow_address && <Text style={styles.detail}>{r.details.tow_address}</Text>}
+        </>
+      ) : (
+        r.start_date && (
+          <Text style={styles.detail}>
+            {r.start_date}{r.end_date ? ` → ${r.end_date}` : ''}
+          </Text>
+        )
+      )}
 
       {r.status === 'declined' ? (
         <View style={styles.declinedBadge}>
@@ -144,6 +163,8 @@ export default function WinterizationRequestCard({ request: r, marinaName, onPai
 
 const styles = StyleSheet.create({
   card: { backgroundColor: Colors.surface, borderRadius: 16, padding: 16, marginBottom: 14 },
+  typeTag: { alignSelf: 'flex-start', backgroundColor: Colors.surfaceAlt, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, marginBottom: 6 },
+  typeTagText: { color: Colors.gold, fontSize: 10, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase' },
   marinaName: { color: Colors.cream, fontSize: 16, fontWeight: '700', marginBottom: 4 },
   detail: { color: Colors.muted, fontSize: 13, marginBottom: 2 },
 
