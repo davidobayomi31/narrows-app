@@ -464,7 +464,25 @@ export default function MarinaRequestsScreen() {
                   {selected.marina_listings?.listing_type === 'haul_out' && selected.details?.approx_weight_lbs != null && (
                     <DetailRow label="Weight / purpose" value={`${selected.details.approx_weight_lbs} lbs — ${selected.details?.purpose ?? '—'}`} />
                   )}
-                  {['slip', 'day_slip', 'storage', 'haul_out'].includes(selected.marina_listings?.listing_type) &&
+                  {selected.marina_listings?.listing_type === 'rental' && (
+                    <>
+                      {selected.details?.age != null && (
+                        <DetailRow label="Renter age / license" value={`${selected.details.age} — ${selected.details?.license_number ?? '—'}`} />
+                      )}
+                      {selected.details?.license_document_path && (
+                        <TouchableOpacity onPress={() => viewDocument(selected.details.license_document_path)}>
+                          <Text style={styles.docLink}>View driver's license →</Text>
+                        </TouchableOpacity>
+                      )}
+                      {selected.start_ts && (
+                        <DetailRow
+                          label="Rental window"
+                          value={`${new Date(selected.start_ts).toLocaleString()} → ${new Date(selected.end_ts).toLocaleString()}`}
+                        />
+                      )}
+                    </>
+                  )}
+                  {['slip', 'day_slip', 'storage', 'haul_out', 'rental'].includes(selected.marina_listings?.listing_type) &&
                     selected.details?.emergency_contact_name && (
                       <DetailRow
                         label="Emergency contact"

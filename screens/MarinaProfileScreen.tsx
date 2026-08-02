@@ -21,6 +21,7 @@ import { WINTERIZATION_REQUESTS_LIVE } from '../constants/features';
 import { supabase } from '../lib/supabase';
 import WinterizeRequestModal from './components/WinterizeRequestModal';
 import BookingRequestModal from './components/BookingRequestModal';
+import RentalBookingModal from './components/RentalBookingModal';
 import WinterizationRequestCard from './components/WinterizationRequestCard';
 import ChatModal from './components/ChatModal';
 import { BOOKING_TYPES, ListingType } from '../lib/bookingTypes';
@@ -47,6 +48,7 @@ export default function MarinaProfileScreen() {
   const [myRequests, setMyRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showWinterize, setShowWinterize] = useState(false);
+  const [showRental, setShowRental] = useState(false);
   // which generalized request-flow modal is open (slip/mooring/storage), if any
   const [bookingType, setBookingType] = useState<ListingType | null>(null);
   const [listingTypes, setListingTypes] = useState<string[]>([]);
@@ -221,6 +223,16 @@ export default function MarinaProfileScreen() {
               </TouchableOpacity>
             )}
 
+            {WINTERIZATION_REQUESTS_LIVE && listingTypes.includes('rental') && (
+              <TouchableOpacity
+                style={styles.winterizeButton}
+                onPress={() => setShowRental(true)}
+              >
+                <Ionicons name="speedometer" size={16} color={Colors.cream} />
+                <Text style={styles.winterizeButtonText}>Rent a Seadoo</Text>
+              </TouchableOpacity>
+            )}
+
             {/* one "Book X" button per request-flow type this marina offers */}
             {WINTERIZATION_REQUESTS_LIVE &&
               (Object.keys(BOOKING_TYPES) as ListingType[])
@@ -297,6 +309,14 @@ export default function MarinaProfileScreen() {
           onSubmitted={() => { setBookingType(null); loadMarina(); }}
         />
       )}
+
+      <RentalBookingModal
+        visible={showRental}
+        marinaId={marina.id}
+        marinaProfileId={marina.profile_id ?? null}
+        onClose={() => setShowRental(false)}
+        onSubmitted={() => { setShowRental(false); loadMarina(); }}
+      />
 
       {myUserId && (
         <ChatModal
