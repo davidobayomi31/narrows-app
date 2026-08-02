@@ -10,7 +10,7 @@
 
 import { Ionicons } from '@expo/vector-icons';
 
-export type ListingType = 'slip' | 'mooring' | 'winterization' | 'rental' | 'fuel' | 'storage';
+export type ListingType = 'slip' | 'day_slip' | 'mooring' | 'winterization' | 'rental' | 'fuel' | 'storage' | 'haul_out';
 
 type BookingTypeConfig = {
   label: string;                                    // "Slip"
@@ -24,13 +24,21 @@ type BookingTypeConfig = {
   needsEndDate: boolean;
 };
 
+// slip/day_slip/storage/haul_out now have real multi-step wizards
+// (BookingRequestModal, WizardModal-based) with proper researched question
+// sets — re-enabled 2026-08-01. mooring/rental/fuel stay disabled: mooring
+// has no wizard built, rental is the instant-book time-slot flow (Phase A4),
+// fuel is pay-at-pump, never a dated booking. winterization keeps its own
+// dedicated button/modal (WinterizeRequestModal), not this generic path.
 export const BOOKING_TYPES: Record<ListingType, BookingTypeConfig> = {
-  slip:          { label: 'Slip',          buttonText: 'Book a Slip',       icon: 'boat',          requestFlow: true,  needsEndDate: true },
-  mooring:       { label: 'Mooring',       buttonText: 'Book a Mooring',    icon: 'locate',        requestFlow: true,  needsEndDate: true },
-  storage:       { label: 'Storage',       buttonText: 'Book Storage',      icon: 'cube',          requestFlow: true,  needsEndDate: true },
-  winterization: { label: 'Winterization', buttonText: 'Winterize My Boat', icon: 'snow',          requestFlow: false, needsEndDate: false },
-  rental:        { label: 'Rental',        buttonText: 'Rent a Seadoo',     icon: 'speedometer',   requestFlow: false, needsEndDate: false },
-  fuel:          { label: 'Fuel',          buttonText: 'Fuel Dock',         icon: 'water',         requestFlow: false, needsEndDate: false },
+  slip:          { label: 'Slip',          buttonText: 'Book a Slip',        icon: 'boat',          requestFlow: true,  needsEndDate: true },
+  day_slip:      { label: 'Day Slip',      buttonText: 'Book a Day Slip',    icon: 'boat',          requestFlow: true,  needsEndDate: true },
+  mooring:       { label: 'Mooring',       buttonText: 'Book a Mooring',     icon: 'locate',        requestFlow: false, needsEndDate: true },
+  storage:       { label: 'Storage',       buttonText: 'Book Storage',       icon: 'cube',          requestFlow: true,  needsEndDate: true },
+  haul_out:      { label: 'Haul-Out',      buttonText: 'Book a Haul-Out',    icon: 'construct',     requestFlow: true,  needsEndDate: false },
+  winterization: { label: 'Winterization', buttonText: 'Winterize My Boat',  icon: 'snow',          requestFlow: false, needsEndDate: false },
+  rental:        { label: 'Rental',        buttonText: 'Rent a Seadoo',      icon: 'speedometer',   requestFlow: false, needsEndDate: false },
+  fuel:          { label: 'Fuel',          buttonText: 'Fuel Dock',          icon: 'water',         requestFlow: false, needsEndDate: false },
 };
 
 export function typeLabel(t: string | undefined | null): string {

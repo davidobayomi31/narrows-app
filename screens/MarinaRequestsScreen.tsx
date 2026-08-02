@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -157,6 +158,17 @@ export default function MarinaRequestsScreen() {
       comment_body: message,
     });
     sendPush(userId, title, message);
+  }
+
+  // booking-documents is a PRIVATE bucket (insurance certs, license photos) —
+  // has to go through a short-lived signed URL, never a public one.
+  async function viewDocument(path: string) {
+    const { data, error } = await supabase.storage.from('booking-documents').createSignedUrl(path, 60);
+    if (error || !data?.signedUrl) {
+      Alert.alert('Could not open', 'The document could not be loaded.');
+      return;
+    }
+    Linking.openURL(data.signedUrl);
   }
 
   async function approve() {
@@ -395,6 +407,70 @@ export default function MarinaRequestsScreen() {
                       )}
                     </>
                   )}
+                  {selected.marina_listings?.listing_type === 'slip' && (
+                    <>
+                      {selected.details?.boat_name && <DetailRow label="Boat name" value={selected.details.boat_name} />}
+                      {selected.details?.registration_number && (
+                        <DetailRow label="Registration" value={selected.details.registration_number} />
+                      )}
+                      {selected.details?.beam_ft != null && (
+                        <DetailRow
+                          label="Beam / draft / height"
+                          value={`${selected.details.beam_ft}ft / ${selected.details?.draft_ft ?? '—'}ft / ${selected.details?.height_ft ?? '—'}ft`}
+                        />
+                      )}
+                      {selected.details?.power_requirement && (
+                        <DetailRow
+                          label="Power / water"
+                          value={`${selected.details.power_requirement} / ${selected.details?.water_hookup ? 'Yes' : 'No'}`}
+                        />
+                      )}
+                      {selected.details?.insurer && (
+                        <DetailRow
+                          label="Insurance"
+                          value={`${selected.details.insurer} — ${selected.details.policy_number} ($${selected.details.liability_amount}, exp. ${selected.details.policy_expiry})`}
+                        />
+                      )}
+                      {selected.details?.insurance_document_path && (
+                        <TouchableOpacity onPress={() => viewDocument(selected.details.insurance_document_path)}>
+                          <Text style={styles.docLink}>View insurance certificate →</Text>
+                        </TouchableOpacity>
+                      )}
+                    </>
+                  )}
+                  {selected.marina_listings?.listing_type === 'day_slip' && (
+                    <>
+                      {selected.details?.beam_ft != null && (
+                        <DetailRow label="Beam / draft" value={`${selected.details.beam_ft}ft / ${selected.details?.draft_ft ?? '—'}ft`} />
+                      )}
+                      {selected.details?.power_requirement && (
+                        <DetailRow label="Power" value={selected.details.power_requirement} />
+                      )}
+                    </>
+                  )}
+                  {selected.marina_listings?.listing_type === 'storage' && (
+                    <>
+                      {selected.details?.beam_ft != null && (
+                        <DetailRow label="Beam / height" value={`${selected.details.beam_ft}ft / ${selected.details?.height_ft ?? '—'}ft`} />
+                      )}
+                      {selected.details?.trailer != null && (
+                        <DetailRow
+                          label="Trailer / shrink-wrap"
+                          value={`${selected.details.trailer ? 'Yes' : 'No'} / ${selected.details?.shrink_wrap ? 'Yes' : 'No'}`}
+                        />
+                      )}
+                    </>
+                  )}
+                  {selected.marina_listings?.listing_type === 'haul_out' && selected.details?.approx_weight_lbs != null && (
+                    <DetailRow label="Weight / purpose" value={`${selected.details.approx_weight_lbs} lbs — ${selected.details?.purpose ?? '—'}`} />
+                  )}
+                  {['slip', 'day_slip', 'storage', 'haul_out'].includes(selected.marina_listings?.listing_type) &&
+                    selected.details?.emergency_contact_name && (
+                      <DetailRow
+                        label="Emergency contact"
+                        value={`${selected.details.emergency_contact_name} — ${selected.details.emergency_contact_phone || '—'}`}
+                      />
+                    )}
                   {!selectedIsWinterization() && selected.start_date ? (
                     <DetailRow
                       label="Dates"
@@ -572,6 +648,7 @@ const styles = StyleSheet.create({
   detailRow: { marginTop: 14 },
   detailLabel: { color: Colors.muted, fontSize: 12, fontWeight: '700', letterSpacing: 0.5, marginBottom: 2 },
   detailValue: { color: Colors.cream, fontSize: 15 },
+  docLink: { color: Colors.gold, fontSize: 13, fontWeight: '600', marginTop: 2, marginBottom: 8 },
 
   inputLabel: { color: Colors.cream, fontSize: 13, fontWeight: '600', marginTop: 16, marginBottom: 8 },
   input: {

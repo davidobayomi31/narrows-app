@@ -17,11 +17,27 @@ import { supabase } from '../lib/supabase';
 import { friendlyError } from '../lib/errors';
 import DismissKeyboardView from './components/DismissKeyboardView';
 
-// 4-question marina signup. Submits a marina_applications row for YOU to review
-// manually (see supabase/marina_winterization.sql) — no self-serve verification,
-// since a false claim on an existing marina listing would be a real problem.
-// The account still gets full app access immediately; only the Requests tab
-// shows a "pending approval" state until you link + approve it.
+// Matches marina_applications_services_check in supabase/booking_expansion.sql —
+// keep in sync if that list ever changes.
+const SERVICE_OPTIONS: { key: string; label: string }[] = [
+  { key: 'slip', label: 'Slip rental (seasonal)' },
+  { key: 'day_slip', label: 'Day slip / transient dockage' },
+  { key: 'winterization', label: 'Winterization' },
+  { key: 'rental', label: 'Watercraft rental (seadoo, kayak, etc.)' },
+  { key: 'storage', label: 'Land / covered storage' },
+  { key: 'haul_out', label: 'Haul-out / lift service' },
+];
+
+// Marina signup. Submits a marina_applications row for YOU to review manually
+// (see supabase/marina_winterization.sql) — no self-serve verification, since
+// a false claim on an existing marina listing would be a real problem. The
+// account still gets full app access immediately; only the Requests tab shows
+// a "pending approval" state until you link + approve it.
+//
+// The services picked here become the marina's actual bookable listings the
+// moment you approve (see the marinas_provision_from_application trigger in
+// booking_expansion.sql) — a boater only ever sees a "Book X" button for a
+// service this marina actually picked.
 export default function MarinaOnboardingScreen() {
   const navigation = useNavigation<any>();
   const [marinaName, setMarinaName] = useState('');
@@ -29,9 +45,14 @@ export default function MarinaOnboardingScreen() {
   const [yearsInBusiness, setYearsInBusiness] = useState('');
   const [contactPhone, setContactPhone] = useState('');
   const [contactEmail, setContactEmail] = useState('');
-  const [offersWinterizing, setOffersWinterizing] = useState<boolean | null>(null);
+  const [services, setServices] = useState<string[]>([]);
+  const [otherService, setOtherService] = useState('');
   const [numSlips, setNumSlips] = useState('');
   const [saving, setSaving] = useState(false);
+
+  function toggleService(key: string) {
+    setServices((prev) => (prev.includes(key) ? prev.filter((s) => s !== key) : [...prev, key]));
+  }
 
   // Apple only shares your name on the very first-ever Sign in with Apple for
   // this app; Google can also omit it. When that happens, ask for it here
@@ -49,6 +70,7 @@ export default function MarinaOnboardingScreen() {
   const canSubmit =
     marinaName.trim().length > 0 &&
     location.trim().length > 0 &&
+    (services.length > 0 || otherService.trim().length > 0) &&
     (!needsName || firstName.trim().length > 0);
 
   async function submit() {
@@ -75,7 +97,8 @@ export default function MarinaOnboardingScreen() {
       years_in_business: yearsInBusiness.trim() ? Number(yearsInBusiness.trim()) : null,
       contact_phone: contactPhone.trim() || null,
       contact_email: contactEmail.trim() || null,
-      offers_winterizing: offersWinterizing,
+      services,
+      other_service: otherService.trim() || null,
       num_slips: numSlips.trim() ? Number(numSlips.trim()) : null,
     });
 
@@ -166,25 +189,33 @@ export default function MarinaOnboardingScreen() {
             autoCapitalize="none"
           />
 
-          <Text style={styles.label}>Do you currently offer boat winterizing?</Text>
-          <View style={styles.toggleRow}>
-            <TouchableOpacity
-              style={[styles.toggleOption, offersWinterizing === true && styles.toggleOptionActive]}
-              onPress={() => setOffersWinterizing(true)}
-            >
-              <Text style={[styles.toggleOptionText, offersWinterizing === true && styles.toggleOptionTextActive]}>
-                Yes
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.toggleOption, offersWinterizing === false && styles.toggleOptionActive]}
-              onPress={() => setOffersWinterizing(false)}
-            >
-              <Text style={[styles.toggleOptionText, offersWinterizing === false && styles.toggleOptionTextActive]}>
-                No
-              </Text>
-            </TouchableOpacity>
+          <Text style={styles.label}>What services do you offer?</Text>
+          <Text style={styles.helperText}>
+            Pick as many as apply — these become the actual booking options boaters see on your
+            profile once you're approved.
+          </Text>
+          <View style={styles.chipRow}>
+            {SERVICE_OPTIONS.map((opt) => (
+              <TouchableOpacity
+                key={opt.key}
+                style={[styles.chip, services.includes(opt.key) && styles.chipActive]}
+                onPress={() => toggleService(opt.key)}
+              >
+                <Text style={[styles.chipText, services.includes(opt.key) && styles.chipTextActive]}>
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
+
+          <Text style={styles.label}>Offer something else? (optional)</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g. fuel dock, boat repair — we'll follow up"
+            placeholderTextColor="#8899AA"
+            value={otherService}
+            onChangeText={setOtherService}
+          />
 
           <Text style={styles.label}>Number of slips / boats</Text>
           <TextInput
@@ -216,6 +247,19 @@ const styles = StyleSheet.create({
   title: { color: Colors.cream, fontSize: 26, fontWeight: 'bold', marginBottom: 8 },
   subtitle: { color: '#8899AA', fontSize: 14, marginBottom: 28, lineHeight: 20 },
   label: { color: Colors.cream, fontSize: 14, fontWeight: '600', marginBottom: 8 },
+  helperText: { color: '#8899AA', fontSize: 12, marginBottom: 12, lineHeight: 16, marginTop: -4 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: '#1A1A1A',
+    borderWidth: 1,
+    borderColor: '#333333',
+  },
+  chipActive: { backgroundColor: Colors.gold, borderColor: Colors.gold },
+  chipText: { color: Colors.cream, fontSize: 13 },
+  chipTextActive: { color: Colors.background, fontWeight: '700' },
   input: {
     backgroundColor: '#1A1A1A',
     borderRadius: 12,
@@ -227,19 +271,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     marginBottom: 20,
   },
-  toggleRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
-  toggleOption: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#333333',
-    backgroundColor: '#1A1A1A',
-  },
-  toggleOptionActive: { backgroundColor: Colors.gold, borderColor: Colors.gold },
-  toggleOptionText: { color: Colors.cream, fontSize: 15, fontWeight: '600' },
-  toggleOptionTextActive: { color: Colors.background },
   submitButton: {
     backgroundColor: Colors.gold,
     borderRadius: 12,
