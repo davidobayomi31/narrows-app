@@ -364,6 +364,37 @@ export default function MarinaRequestsScreen() {
                   {selected.details?.tow_address ? (
                     <DetailRow label="Tow pickup address" value={selected.details.tow_address} />
                   ) : null}
+                  {selectedIsWinterization() && (
+                    <>
+                      {(selected.details?.make_model || selected.details?.year) && (
+                        <DetailRow
+                          label="Make / model / year"
+                          value={`${selected.details?.make_model || '—'}${selected.details?.year ? ` (${selected.details.year})` : ''}`}
+                        />
+                      )}
+                      {selected.details?.beam_ft != null && (
+                        <DetailRow label="Beam" value={`${selected.details.beam_ft} ft`} />
+                      )}
+                      {(selected.details?.engine_type || selected.details?.fuel_type) && (
+                        <DetailRow
+                          label="Engine / fuel"
+                          value={`${selected.details?.engine_type || '—'} / ${selected.details?.fuel_type || '—'}`}
+                        />
+                      )}
+                      {selected.details?.mast_down != null && (
+                        <DetailRow label="Mast down" value={selected.details.mast_down ? 'Yes' : 'No'} />
+                      )}
+                      {selected.details?.shrink_wrap != null && (
+                        <DetailRow label="Shrink-wrap" value={selected.details.shrink_wrap ? 'Yes' : 'No'} />
+                      )}
+                      {selected.details?.emergency_contact_name && (
+                        <DetailRow
+                          label="Emergency contact"
+                          value={`${selected.details.emergency_contact_name} — ${selected.details.emergency_contact_phone || '—'}`}
+                        />
+                      )}
+                    </>
+                  )}
                   {!selectedIsWinterization() && selected.start_date ? (
                     <DetailRow
                       label="Dates"
