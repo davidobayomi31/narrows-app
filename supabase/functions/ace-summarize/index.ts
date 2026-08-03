@@ -103,8 +103,13 @@ Deno.serve(async (req) => {
     const response = await anthropic.messages.create({
       model: 'claude-opus-5',
       max_tokens: 1024,
+      // Reformatting a few structured fields into a paragraph doesn't need
+      // deep reasoning -- thinking is on by default on Opus 5 and bills as
+      // output tokens ($25/1M, same rate as the response itself), so it's
+      // pure cost with no quality benefit for a task this simple.
+      thinking: { type: 'disabled' },
       output_config: {
-        effort: 'medium',
+        effort: 'low',
         format: { type: 'json_schema', schema: SUMMARY_SCHEMA },
       },
       system:
