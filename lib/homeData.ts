@@ -19,47 +19,51 @@ export type Marina = {
 
 // in-memory cache for the current app session, so Splash can prefetch this
 // data and Home doesn't need to show its own loading state right after.
-let cachedMarina: Marina | null = null;
+// A LIST now, not one marina — Home shows a swipeable carousel across every
+// marina with `featured = true` (still the same curation flag as before,
+// just no longer capped at exactly one row via `.single()`).
+let cachedMarinas: Marina[] = [];
 let cachedWeather: Weather | null = null;
 let hasCached = false;
 
-export async function loadHomeData(): Promise<{ marina: Marina | null; weather: Weather | null }> {
+export async function loadHomeData(): Promise<{ marinas: Marina[]; weather: Weather | null }> {
   try {
     const { data, error } = await withTimeout(
       supabase
         .from('marinas')
         .select('id, name, lake, address, phone, amenities, latitude, longitude, image_url, water_alert')
         .eq('featured', true)
-        .single()
+        .order('created_at', { ascending: true })
     );
 
-    if (error || !data) throw error ?? new Error('no featured marina');
+    if (error || !data || data.length === 0) throw error ?? new Error('no featured marinas');
 
-    const marina: Marina = data;
+    const marinas: Marina[] = data;
     let weather: Weather | null = null;
-    if (data.latitude != null && data.longitude != null) {
-      // weather is best-effort — a failure here shouldn't lose the marina
-      weather = await withTimeout(getWeather(data.latitude, data.longitude)).catch(() => null);
+    // weather is best-effort, for the first (default-shown) marina only —
+    // Homepage re-fetches for whichever marina is actively swiped to.
+    if (marinas[0].latitude != null && marinas[0].longitude != null) {
+      weather = await withTimeout(getWeather(marinas[0].latitude, marinas[0].longitude)).catch(() => null);
     }
 
-    cachedMarina = marina;
+    cachedMarinas = marinas;
     cachedWeather = weather;
     hasCached = true;
 
     // persist so a later OFFLINE cold start can still show this
-    await cacheSet(HOME_CACHE_KEY, { marina, weather });
+    await cacheSet(HOME_CACHE_KEY, { marinas, weather });
 
-    return { marina, weather };
+    return { marinas, weather };
   } catch {
     // offline or the request failed — fall back to the last data we saved
-    const saved = await cacheGet<{ marina: Marina | null; weather: Weather | null }>(HOME_CACHE_KEY);
-    cachedMarina = saved?.marina ?? null;
+    const saved = await cacheGet<{ marinas: Marina[]; weather: Weather | null }>(HOME_CACHE_KEY);
+    cachedMarinas = saved?.marinas ?? [];
     cachedWeather = saved?.weather ?? null;
     hasCached = true;
-    return { marina: cachedMarina, weather: cachedWeather };
+    return { marinas: cachedMarinas, weather: cachedWeather };
   }
 }
 
 export function getCachedHomeData() {
-  return { marina: cachedMarina, weather: cachedWeather, hasCached };
+  return { marinas: cachedMarinas, weather: cachedWeather, hasCached };
 }

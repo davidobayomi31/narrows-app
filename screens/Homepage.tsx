@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ImageBackground, Linking, Alert, Image, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ImageBackground, Linking, Alert, Image, RefreshControl, Dimensions, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -21,6 +21,8 @@ const HERO_OVERLAY = ['rgba(0,0,0,0.25)', 'rgba(0,0,0,0.55)', 'rgba(0,0,0,0.92)'
 
 // the colorful Spotlight promo block
 const SPOTLIGHT_GRADIENT = ['#F7825F', '#C2A24E'] as const;
+
+const screenW = Dimensions.get('window').width;
 
 // 322 -> 'NW'
 function degToCompass(deg: number) {
@@ -62,8 +64,11 @@ function iconToText(icon: string) {
   return map[icon] ?? 'Cloudy';
 }
 export default function Homepage(){
-  // holds the featured marina once it loads (null until then)
-  const [marina, setMarina] = useState<Marina | null>(null);
+  // the full list of featured marinas — Home shows a swipeable carousel
+  // across all of them, one page per marina.
+  const [marinas, setMarinas] = useState<Marina[]>([]);
+  const [activeMarinaIndex, setActiveMarinaIndex] = useState(0);
+  const marina = marinas[activeMarinaIndex] ?? null; // the currently-viewed one
   const [weather, setWeather] = useState<Weather | null>(null);
   const [ready, setReady] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -81,15 +86,15 @@ export default function Homepage(){
     async function loadMarina() {
       const cached = getCachedHomeData();
       if (cached.hasCached) {
-        setMarina(cached.marina);
+        setMarinas(cached.marinas);
         setWeather(cached.weather);
         setReady(true);
         return;
       }
 
       try {
-        const { marina, weather } = await loadHomeData();
-        setMarina(marina);
+        const { marinas, weather } = await loadHomeData();
+        setMarinas(marinas);
         setWeather(weather);
       } finally {
         setReady(true);
@@ -97,6 +102,16 @@ export default function Homepage(){
     }
     loadMarina();
   }, []);   // empty array = run once on mount
+
+  // swiping to a new marina card updates which one is "active" — the wind/
+  // weather section below already re-fetches per `marina` via the effect
+  // right after this one.
+  function onMarinaScrollEnd(e: NativeSyntheticEvent<NativeScrollEvent>) {
+    const idx = Math.round(e.nativeEvent.contentOffset.x / screenW);
+    if (idx !== activeMarinaIndex && idx >= 0 && idx < marinas.length) {
+      setActiveMarinaIndex(idx);
+    }
+  }
 
   // refresh weather whenever the Home tab regains focus, so it doesn't go stale
   // (getWeather has a 15-min cache, so this won't hammer the API)
@@ -132,12 +147,12 @@ export default function Homepage(){
     }
   }
 
-  // pull-to-refresh: force a fresh fetch of marina + weather
+  // pull-to-refresh: force a fresh fetch of marinas + weather
   async function onRefresh() {
     setRefreshing(true);
     try {
-      const { marina, weather } = await loadHomeData();
-      setMarina(marina);
+      const { marinas, weather } = await loadHomeData();
+      setMarinas(marinas);
       setWeather(weather);
     } finally {
       setRefreshing(false);
@@ -249,40 +264,65 @@ export default function Homepage(){
           </LinearGradient>
         )}
 
-        {/* 2. Featured Marina — full-bleed photo hero */}
-        {marina && (
-          <TouchableOpacity
-            activeOpacity={0.92}
-            onPress={() => navigation.navigate('MarinaProfile', { marinaId: marina.id })}
-          >
-          <ImageBackground
-            source={{ uri: marina.image_url || MARINA_FALLBACK }}
-            style={styles.marinaHero}
-            imageStyle={styles.marinaHeroImage}
-          >
-            <LinearGradient colors={HERO_OVERLAY} style={StyleSheet.absoluteFill} />
-            <View style={styles.marinaHeroContent}>
-              <Text style={styles.featuredLabel}>FEATURED</Text>
-              <Text style={styles.marinaName}>{marina.name}</Text>
-              {marina.lake && <Text style={styles.marinaDetail}>{marina.lake}</Text>}
-              {marina.address && <Text style={styles.marinaDetail}>{marina.address}</Text>}
-              {marina.phone && <Text style={styles.marinaDetail}>{marina.phone}</Text>}
+        {/* 2. Featured Marinas — swipeable carousel of full-bleed photo heroes.
+            Full-bleed (negative margin cancels scrollContent's own padding)
+            so each page is exactly one screen-width wide and paging math
+            lines up; each page re-adds its own inset padding to match the
+            old single-marina look. */}
+        {marinas.length > 0 && (
+          <View style={styles.carouselWrap}>
+            <ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onMomentumScrollEnd={onMarinaScrollEnd}
+              scrollEventThrottle={16}
+            >
+              {marinas.map((m) => (
+                <View key={m.id} style={styles.carouselPage}>
+                  <TouchableOpacity
+                    activeOpacity={0.92}
+                    onPress={() => navigation.navigate('MarinaProfile', { marinaId: m.id })}
+                  >
+                    <ImageBackground
+                      source={{ uri: m.image_url || MARINA_FALLBACK }}
+                      style={styles.marinaHero}
+                      imageStyle={styles.marinaHeroImage}
+                    >
+                      <LinearGradient colors={HERO_OVERLAY} style={StyleSheet.absoluteFill} />
+                      <View style={styles.marinaHeroContent}>
+                        <Text style={styles.featuredLabel}>FEATURED</Text>
+                        <Text style={styles.marinaName}>{m.name}</Text>
+                        {m.lake && <Text style={styles.marinaDetail}>{m.lake}</Text>}
+                        {m.address && <Text style={styles.marinaDetail}>{m.address}</Text>}
+                        {m.phone && <Text style={styles.marinaDetail}>{m.phone}</Text>}
 
-              <View style={styles.tagRow}>
-                {(marina.amenities ?? []).map((tag) => (
-                  <View key={tag} style={styles.tag}>
-                    <Text style={styles.tagText}>{tag}</Text>
-                  </View>
+                        <View style={styles.tagRow}>
+                          {(m.amenities ?? []).map((tag) => (
+                            <View key={tag} style={styles.tag}>
+                              <Text style={styles.tagText}>{tag}</Text>
+                            </View>
+                          ))}
+                        </View>
+
+                        <TouchableOpacity style={styles.directionsButton} onPress={openDirections}>
+                          <Ionicons name="navigate" size={16} color={Colors.black} />
+                          <Text style={styles.directionsButtonText}>Get Directions</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </ImageBackground>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </ScrollView>
+            {marinas.length > 1 && (
+              <View style={styles.dotsRow}>
+                {marinas.map((m, i) => (
+                  <View key={m.id} style={[styles.dot, i === activeMarinaIndex && styles.dotActive]} />
                 ))}
               </View>
-
-              <TouchableOpacity style={styles.directionsButton} onPress={openDirections}>
-                <Ionicons name="navigate" size={16} color={Colors.black} />
-                <Text style={styles.directionsButtonText}>Get Directions</Text>
-              </TouchableOpacity>
-            </View>
-          </ImageBackground>
-          </TouchableOpacity>
+            )}
+          </View>
         )}
 
         {weather ? (
@@ -545,6 +585,35 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 18,
     marginBottom: 14,
+  },
+
+  // Marina carousel — full-bleed (cancels scrollContent's paddingHorizontal:16
+  // so each page is exactly screenW wide, which is what the paging math in
+  // onMarinaScrollEnd assumes)
+  carouselWrap: {
+    marginHorizontal: -16,
+    marginBottom: 14,
+  },
+  carouselPage: {
+    width: screenW,
+    paddingHorizontal: 16,
+  },
+  dotsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: -8,
+    marginBottom: 4,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.surfaceAlt,
+  },
+  dotActive: {
+    backgroundColor: Colors.gold,
+    width: 18,
   },
 
   // Marina photo hero
