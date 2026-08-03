@@ -212,6 +212,8 @@ export default function MarinaProfileScreen() {
               ))}
             </View>
 
+            {marina.description && <Text style={styles.description}>{marina.description}</Text>}
+
             <TouchableOpacity style={styles.directionsButton} onPress={openDirections}>
               <Ionicons name="navigate" size={16} color={Colors.black} />
               <Text style={styles.directionsButtonText}>Get Directions</Text>
@@ -351,6 +353,8 @@ const styles = StyleSheet.create({
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12, marginBottom: 16 },
   tag: { backgroundColor: Colors.surfaceAlt, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 },
   tagText: { color: Colors.cream, fontSize: 12 },
+
+  description: { color: 'rgba(255,255,255,0.85)', fontSize: 14, lineHeight: 21, marginBottom: 16 },
 
   directionsButton: {
     flexDirection: 'row',

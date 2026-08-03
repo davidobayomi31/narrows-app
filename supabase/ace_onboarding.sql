@@ -33,6 +33,12 @@ create table if not exists public.marina_apply_drafts (
 
 alter table public.marina_apply_drafts enable row level security;
 
+-- RLS policies alone do nothing without the underlying table GRANT —
+-- Postgres checks privileges before RLS ever runs. anon/authenticated get
+-- no DML rights on a new table by default.
+grant select, insert on public.marina_apply_drafts to anon, authenticated;
+grant delete on public.marina_apply_drafts to authenticated;
+
 -- The id itself is the unguessable capability (same trust model as a Stripe
 -- Checkout session URL or an unlisted share link) — anyone with the id can
 -- read/delete it, but there's no way to enumerate ids, and the payload is
