@@ -9,6 +9,7 @@ import { friendlyError } from '../../lib/errors';
 import { formatDateYMD } from '../../lib/dateFormat';
 import { sendPush } from '../../lib/sendPush';
 import { pickAndUploadBookingDocument } from '../../lib/uploadBookingDocument';
+import { randomUUID } from '../../lib/uuid';
 import WizardModal from './WizardModal';
 
 // Watercraft rental — the ONE instant-book flow in the app. Unlike every
@@ -53,7 +54,7 @@ function formatHour(h: number): string {
 export default function RentalBookingModal({ visible, marinaId, marinaProfileId, onClose, onSubmitted }: Props) {
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const [step, setStep] = useState(0);
-  const [bookingId] = useState(() => crypto.randomUUID());
+  const [bookingId] = useState(() => randomUUID());
 
   const [listings, setListings] = useState<Listing[]>([]);
 
@@ -69,6 +70,13 @@ export default function RentalBookingModal({ visible, marinaId, marinaProfileId,
   // Step 1 — Renter Info
   const [dob, setDob] = useState<Date | null>(null);
   const [showDobPicker, setShowDobPicker] = useState(false);
+  // PCOC (Pleasure Craft Operator Card) — the actual legal requirement to
+  // operate a powered watercraft in Canada, with no age exemption for PWCs
+  // like a seadoo. A driver's license has no bearing on boating competency;
+  // it's collected separately below purely as photo ID (PCOC cards don't
+  // carry a photo), so the marina has something to match the renter against
+  // at pickup.
+  const [pcocNumber, setPcocNumber] = useState('');
   const [licenseNumber, setLicenseNumber] = useState('');
   const [licensePhotoPath, setLicensePhotoPath] = useState<string | null>(null);
   const [uploadingLicense, setUploadingLicense] = useState(false);
@@ -138,7 +146,13 @@ export default function RentalBookingModal({ visible, marinaId, marinaProfileId,
 
   const age = dob ? calculateAge(dob) : null;
   const step0Valid = availableListing != null && !checkingAvailability;
-  const step1Valid = dob != null && age != null && age >= MIN_AGE && licenseNumber.trim().length > 0 && licensePhotoPath != null;
+  const step1Valid =
+    dob != null &&
+    age != null &&
+    age >= MIN_AGE &&
+    pcocNumber.trim().length > 0 &&
+    licenseNumber.trim().length > 0 &&
+    licensePhotoPath != null;
   const step2Valid = ackNoAlcohol && ackNoShallow && ackNoTowing && ackDamage;
   const step3Valid = emergencyContactName.trim().length > 0 && emergencyContactPhone.trim().length > 0;
   const stepValid = [step0Valid, step1Valid, step2Valid, step3Valid][step];
@@ -156,6 +170,7 @@ export default function RentalBookingModal({ visible, marinaId, marinaProfileId,
     setAvailableListing(null);
     setAvailabilityError(null);
     setDob(null);
+    setPcocNumber('');
     setLicenseNumber('');
     setLicensePhotoPath(null);
     setAckNoAlcohol(false);
@@ -231,6 +246,7 @@ export default function RentalBookingModal({ visible, marinaId, marinaProfileId,
       details: {
         dob: dob ? formatDateYMD(dob) : null,
         age,
+        pcoc_number: pcocNumber.trim(),
         license_number: licenseNumber.trim(),
         license_document_path: licensePhotoPath,
         emergency_contact_name: emergencyContactName.trim(),
@@ -405,12 +421,21 @@ export default function RentalBookingModal({ visible, marinaId, marinaProfileId,
             <Text style={styles.errorText}>Renters must be at least {MIN_AGE} years old.</Text>
           )}
 
-          <Text style={styles.label}>Driver's license number</Text>
-          <TextInput style={styles.input} placeholder="License #" placeholderTextColor={Colors.muted} value={licenseNumber} onChangeText={setLicenseNumber} />
+          <Text style={styles.label}>Pleasure Craft Operator Card (PCOC) #</Text>
+          <Text style={styles.helperText}>
+            Required by Transport Canada to operate a powered watercraft — no age exemption for a seadoo.
+          </Text>
+          <TextInput style={styles.input} placeholder="PCOC card #" placeholderTextColor={Colors.muted} value={pcocNumber} onChangeText={setPcocNumber} />
 
-          <Text style={styles.label}>Driver's license photo</Text>
+          <Text style={styles.label}>Photo ID number (driver's license, passport, etc.)</Text>
+          <Text style={styles.helperText}>
+            A PCOC card has no photo — this is so the marina can confirm you're the renter at pickup.
+          </Text>
+          <TextInput style={styles.input} placeholder="ID #" placeholderTextColor={Colors.muted} value={licenseNumber} onChangeText={setLicenseNumber} />
+
+          <Text style={styles.label}>Photo ID — photo</Text>
           {licensePhotoPath ? (
-            <Text style={styles.availableText}>✓ License attached</Text>
+            <Text style={styles.availableText}>✓ ID attached</Text>
           ) : (
             <TouchableOpacity style={styles.verifyButton} onPress={handleUploadLicense} disabled={uploadingLicense}>
               <Text style={styles.verifyButtonText}>{uploadingLicense ? 'Uploading…' : 'Upload photo'}</Text>
@@ -447,7 +472,7 @@ export default function RentalBookingModal({ visible, marinaId, marinaProfileId,
           </View>
           <View style={styles.reviewRow}>
             <Text style={styles.reviewLabel}>Renter</Text>
-            <Text style={styles.reviewValue}>Age {age} — License {licenseNumber}</Text>
+            <Text style={styles.reviewValue}>Age {age} — PCOC {pcocNumber} — ID {licenseNumber}</Text>
           </View>
 
           {estimate != null && (
@@ -474,6 +499,7 @@ function AckRow({ checked, onPress, text }: { checked: boolean; onPress: () => v
 
 const styles = StyleSheet.create({
   label: { color: Colors.cream, fontSize: 14, fontWeight: '600', marginTop: 16, marginBottom: 8 },
+  helperText: { color: Colors.muted, fontSize: 12, lineHeight: 16, marginTop: -4, marginBottom: 8 },
   empty: { color: Colors.muted, fontSize: 13, marginBottom: 8 },
 
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

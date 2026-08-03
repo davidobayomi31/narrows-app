@@ -8,6 +8,7 @@ import { formatDateYMD } from '../../lib/dateFormat';
 import { sendPush } from '../../lib/sendPush';
 import { pickAndUploadBookingDocument } from '../../lib/uploadBookingDocument';
 import { BOOKING_TYPES, ListingType, typeLabel } from '../../lib/bookingTypes';
+import { randomUUID } from '../../lib/uuid';
 import WizardModal from './WizardModal';
 
 // Real multi-step wizards for slip / day_slip / storage / haul_out — replaces
@@ -66,7 +67,7 @@ export default function BookingRequestModal({
   // Pre-generated so document uploads (insurance) have somewhere to live
   // before the booking row exists — the same id is used as bookings.id at
   // submit time.
-  const [bookingId] = useState(() => crypto.randomUUID());
+  const [bookingId] = useState(() => randomUUID());
 
   const [listings, setListings] = useState<Listing[]>([]);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);

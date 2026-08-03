@@ -9,27 +9,33 @@ import { friendlyError } from './errors';
 // boater and that booking's marina can ever read it back.
 //
 // bookingId must be generated client-side BEFORE the booking row exists (the
-// wizard calls crypto.randomUUID() when it opens, then inserts the booking
-// with that same id at submit time) — the storage path needs a booking id to
+// wizard calls lib/uuid.ts's randomUUID() when it opens, then inserts the
+// booking with that same id at submit time) — the storage path needs a booking id to
 // scope access to, but the upload has to happen before the boater hits
 // submit so they can see the file attached in the Review step.
 //
 // Returns the storage PATH (not a public URL — the bucket is private) to
 // store in bookings.details, or null if cancelled/failed.
 export async function pickAndUploadBookingDocument(bookingId: string, label: string): Promise<string | null> {
-  const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!perm.granted) {
-    Alert.alert('Permission needed', `Allow photo access to attach your ${label}.`);
-    return null;
-  }
-
-  const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ['images'],
-    quality: 0.7,
-  });
-  if (result.canceled) return null;
-
+  // Everything below is inside one try/catch, including the permission
+  // request and the picker launch — if either throws (Simulator quirks,
+  // permission-dialog edge cases), the caller's setUploadingLicense(false)
+  // still runs, because pickAndUploadBookingDocument itself never rejects.
+  // Previously those two calls were outside the try block, so a throw there
+  // left the caller's "Uploading…" state stuck forever with no error shown.
   try {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Permission needed', `Allow photo access to attach your ${label}.`);
+      return null;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.7,
+    });
+    if (result.canceled) return null;
+
     const uri = result.assets[0].uri;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;

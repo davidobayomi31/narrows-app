@@ -18,7 +18,24 @@
 -- marina (or David) adds more rows manually, or the website listings editor
 -- (Phase B) exists to self-serve that. Not a bug — a deliberate placeholder
 -- matching how far the listings-management UI has been built so far.
+--
+-- ALSO syncs marinas.address / phone / amenities from the application the
+-- moment profile_id is linked — previously David had to retype these by hand
+-- into the marinas row, which is exactly how a marina's real submitted
+-- address and amenities ended up never showing in the app (the marinas row
+-- kept whatever placeholder was there when David first created it). This
+-- only fires on the profile_id link itself (see guard below), so it never
+-- touches an already-linked marina whose data was hand-edited afterward.
+-- marinas.name is intentionally NOT synced — David may rename on approval
+-- (e.g. adding "Marina" / fixing capitalization) and a relink shouldn't undo that.
 -- ============================================================================
+
+alter table public.marina_applications add column if not exists amenities text[] not null default '{}';
+-- set by lib/geocode.ts's verifyAddress() at onboarding time — the location
+-- text is now Nominatim-verified, so its coordinates are real too, and can
+-- seed marinas.latitude/longitude on link (previously always manual).
+alter table public.marina_applications add column if not exists location_lat numeric;
+alter table public.marina_applications add column if not exists location_lng numeric;
 
 create or replace function public.provision_listings_from_application()
 returns trigger
@@ -27,8 +44,13 @@ security definer
 set search_path = public
 as $$
 declare
-  app_services text[];
-  svc          text;
+  app_services  text[];
+  app_amenities text[];
+  app_location  text;
+  app_phone     text;
+  app_lat       numeric;
+  app_lng       numeric;
+  svc           text;
 begin
   if new.profile_id is null then
     return new;
@@ -41,11 +63,23 @@ begin
     return new;
   end if;
 
-  select services into app_services
+  select services, amenities, location, contact_phone, location_lat, location_lng
+    into app_services, app_amenities, app_location, app_phone, app_lat, app_lng
     from public.marina_applications
    where user_id = new.profile_id
    order by created_at desc
    limit 1;
+
+  if app_location is not null or app_phone is not null or app_amenities is not null or app_lat is not null then
+    update public.marinas
+       set address   = coalesce(app_location, address),
+           phone     = coalesce(app_phone, phone),
+           amenities = case when app_amenities is not null and array_length(app_amenities, 1) > 0
+                             then app_amenities else amenities end,
+           latitude  = coalesce(app_lat, latitude),
+           longitude = coalesce(app_lng, longitude)
+     where id = new.id;
+  end if;
 
   if app_services is null then
     return new;

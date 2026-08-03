@@ -19,9 +19,6 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import { Colors } from '../constants/colors';
 import { WINTERIZATION_REQUESTS_LIVE } from '../constants/features';
 import { supabase } from '../lib/supabase';
-import WinterizeRequestModal from './components/WinterizeRequestModal';
-import BookingRequestModal from './components/BookingRequestModal';
-import RentalBookingModal from './components/RentalBookingModal';
 import WinterizationRequestCard from './components/WinterizationRequestCard';
 import ChatModal from './components/ChatModal';
 import { BOOKING_TYPES, ListingType } from '../lib/bookingTypes';
@@ -47,10 +44,6 @@ export default function MarinaProfileScreen() {
   const [posts, setPosts] = useState<any[]>([]);
   const [myRequests, setMyRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showWinterize, setShowWinterize] = useState(false);
-  const [showRental, setShowRental] = useState(false);
-  // which generalized request-flow modal is open (slip/mooring/storage), if any
-  const [bookingType, setBookingType] = useState<ListingType | null>(null);
   const [listingTypes, setListingTypes] = useState<string[]>([]);
   const [showChat, setShowChat] = useState(false);
   const [myUserId, setMyUserId] = useState<string | null>(null);
@@ -167,6 +160,17 @@ export default function MarinaProfileScreen() {
     );
   }
 
+  // A marina account viewing its own profile shouldn't be able to book its
+  // own services (winterize itself, rent its own seadoo, etc.) — it's the
+  // same account on both sides of the transaction.
+  const isOwnMarina = myUserId != null && marina.profile_id != null && myUserId === marina.profile_id;
+  const hasBookableServices =
+    marina.winterization_enabled ||
+    listingTypes.includes('rental') ||
+    (Object.keys(BOOKING_TYPES) as ListingType[]).some(
+      (t) => BOOKING_TYPES[t].requestFlow && listingTypes.includes(t)
+    );
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -213,40 +217,19 @@ export default function MarinaProfileScreen() {
               <Text style={styles.directionsButtonText}>Get Directions</Text>
             </TouchableOpacity>
 
-            {WINTERIZATION_REQUESTS_LIVE && marina.winterization_enabled && (
+            {/* A marina can't book its own services, and there's nothing to
+                show if it hasn't listed any yet — so the entry point to
+                MarinaServicesScreen only appears when there's actually
+                something a boater (not the owner) could book. */}
+            {WINTERIZATION_REQUESTS_LIVE && !isOwnMarina && hasBookableServices && (
               <TouchableOpacity
-                style={styles.winterizeButton}
-                onPress={() => setShowWinterize(true)}
+                style={styles.secondaryButton}
+                onPress={() => navigation.navigate('MarinaServices', { marinaId: marina.id })}
               >
-                <Ionicons name="snow" size={16} color={Colors.cream} />
-                <Text style={styles.winterizeButtonText}>Winterize My Boat</Text>
+                <Ionicons name="apps" size={16} color={Colors.cream} />
+                <Text style={styles.secondaryButtonText}>Book a Service</Text>
               </TouchableOpacity>
             )}
-
-            {WINTERIZATION_REQUESTS_LIVE && listingTypes.includes('rental') && (
-              <TouchableOpacity
-                style={styles.winterizeButton}
-                onPress={() => setShowRental(true)}
-              >
-                <Ionicons name="speedometer" size={16} color={Colors.cream} />
-                <Text style={styles.winterizeButtonText}>Rent a Seadoo</Text>
-              </TouchableOpacity>
-            )}
-
-            {/* one "Book X" button per request-flow type this marina offers */}
-            {WINTERIZATION_REQUESTS_LIVE &&
-              (Object.keys(BOOKING_TYPES) as ListingType[])
-                .filter((t) => BOOKING_TYPES[t].requestFlow && listingTypes.includes(t))
-                .map((t) => (
-                  <TouchableOpacity
-                    key={t}
-                    style={styles.winterizeButton}
-                    onPress={() => setBookingType(t)}
-                  >
-                    <Ionicons name={BOOKING_TYPES[t].icon} size={16} color={Colors.cream} />
-                    <Text style={styles.winterizeButtonText}>{BOOKING_TYPES[t].buttonText}</Text>
-                  </TouchableOpacity>
-                ))}
           </View>
         </ImageBackground>
 
@@ -290,33 +273,6 @@ export default function MarinaProfileScreen() {
           )}
         </View>
       </ScrollView>
-
-      <WinterizeRequestModal
-        visible={showWinterize}
-        marinaId={marina.id}
-        marinaProfileId={marina.profile_id ?? null}
-        onClose={() => setShowWinterize(false)}
-        onSubmitted={() => { setShowWinterize(false); loadMarina(); }}
-      />
-
-      {bookingType && (
-        <BookingRequestModal
-          visible={bookingType != null}
-          marinaId={marina.id}
-          marinaProfileId={marina.profile_id ?? null}
-          listingType={bookingType}
-          onClose={() => setBookingType(null)}
-          onSubmitted={() => { setBookingType(null); loadMarina(); }}
-        />
-      )}
-
-      <RentalBookingModal
-        visible={showRental}
-        marinaId={marina.id}
-        marinaProfileId={marina.profile_id ?? null}
-        onClose={() => setShowRental(false)}
-        onSubmitted={() => { setShowRental(false); loadMarina(); }}
-      />
 
       {myUserId && (
         <ChatModal
@@ -407,7 +363,7 @@ const styles = StyleSheet.create({
   },
   directionsButtonText: { color: Colors.black, fontWeight: '700', fontSize: 15 },
 
-  winterizeButton: {
+  secondaryButton: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
@@ -417,7 +373,7 @@ const styles = StyleSheet.create({
     padding: 14,
     marginTop: 10,
   },
-  winterizeButtonText: { color: Colors.cream, fontWeight: '700', fontSize: 15 },
+  secondaryButtonText: { color: Colors.cream, fontWeight: '700', fontSize: 15 },
 
   requestsSection: { paddingHorizontal: 16, paddingTop: 20 },
   postsSection: { paddingHorizontal: 16, paddingTop: 20 },

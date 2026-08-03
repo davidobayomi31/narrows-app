@@ -16,6 +16,10 @@ type BookingTypeConfig = {
   label: string;                                    // "Slip"
   buttonText: string;                               // "Book a Slip"
   icon: keyof typeof Ionicons.glyphMap;
+  // one-line, boater-facing explanation shown under the label on
+  // MarinaServicesScreen's service cards — same copy for every marina, since
+  // it describes the service type, not anything marina-specific.
+  description: string;
   // true = books via the generalized request modal (dates + boat + notes).
   // winterization/rental/fuel are false — each has (or will have) its own flow.
   requestFlow: boolean;
@@ -31,14 +35,22 @@ type BookingTypeConfig = {
 // fuel is pay-at-pump, never a dated booking. winterization keeps its own
 // dedicated button/modal (WinterizeRequestModal), not this generic path.
 export const BOOKING_TYPES: Record<ListingType, BookingTypeConfig> = {
-  slip:          { label: 'Slip',          buttonText: 'Book a Slip',        icon: 'boat',          requestFlow: true,  needsEndDate: true },
-  day_slip:      { label: 'Day Slip',      buttonText: 'Book a Day Slip',    icon: 'boat',          requestFlow: true,  needsEndDate: true },
-  mooring:       { label: 'Mooring',       buttonText: 'Book a Mooring',     icon: 'locate',        requestFlow: false, needsEndDate: true },
-  storage:       { label: 'Storage',       buttonText: 'Book Storage',       icon: 'cube',          requestFlow: true,  needsEndDate: true },
-  haul_out:      { label: 'Haul-Out',      buttonText: 'Book a Haul-Out',    icon: 'construct',     requestFlow: true,  needsEndDate: false },
-  winterization: { label: 'Winterization', buttonText: 'Winterize My Boat',  icon: 'snow',          requestFlow: false, needsEndDate: false },
-  rental:        { label: 'Rental',        buttonText: 'Rent a Seadoo',      icon: 'speedometer',   requestFlow: false, needsEndDate: false },
-  fuel:          { label: 'Fuel',          buttonText: 'Fuel Dock',          icon: 'water',         requestFlow: false, needsEndDate: false },
+  slip:          { label: 'Slip',          buttonText: 'Book a Slip',        icon: 'boat',          requestFlow: true,  needsEndDate: true,
+    description: 'Reserve a slip for the season and keep your boat docked here.' },
+  day_slip:      { label: 'Day Slip',      buttonText: 'Book a Day Slip',    icon: 'boat',          requestFlow: true,  needsEndDate: true,
+    description: 'Dock for the day when you’re just passing through.' },
+  mooring:       { label: 'Mooring',       buttonText: 'Book a Mooring',     icon: 'locate',        requestFlow: false, needsEndDate: true,
+    description: 'Reserve a mooring buoy to anchor your boat offshore.' },
+  storage:       { label: 'Storage',       buttonText: 'Book Storage',       icon: 'cube',          requestFlow: true,  needsEndDate: true,
+    description: 'Store your boat or trailer on land for the off-season.' },
+  haul_out:      { label: 'Haul-Out',      buttonText: 'Book a Haul-Out',    icon: 'construct',     requestFlow: true,  needsEndDate: false,
+    description: 'Get your boat lifted out of the water for repairs or storage.' },
+  winterization: { label: 'Winterization', buttonText: 'Winterize My Boat',  icon: 'snow',          requestFlow: false, needsEndDate: false,
+    description: 'Get your boat winterized and ready before the season ends.' },
+  rental:        { label: 'Rental',        buttonText: 'Rent a Seadoo',      icon: 'speedometer',   requestFlow: false, needsEndDate: false,
+    description: 'Book a seadoo instantly — pay now, no waiting for approval.' },
+  fuel:          { label: 'Fuel',          buttonText: 'Fuel Dock',          icon: 'water',         requestFlow: false, needsEndDate: false,
+    description: 'Fuel up at the dock — pay in person, no booking needed.' },
 };
 
 export function typeLabel(t: string | undefined | null): string {
