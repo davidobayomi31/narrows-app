@@ -173,11 +173,17 @@ alter table public.bookings
   add constraint bookings_date_order
   check (end_date is null or start_date is null or end_date > start_date);
 
--- anything exclusive (a slip, a mooring, a rental) must say when
+-- anything exclusive (a slip, a mooring, a rental) must say when — either
+-- the plain-date range (slip/storage/day_slip/mooring, whole-day bookings)
+-- or the timestamp range (rental instant-book, hourly windows within a day).
 alter table public.bookings drop constraint if exists bookings_exclusive_needs_dates;
 alter table public.bookings
   add constraint bookings_exclusive_needs_dates
-  check (not exclusive or (start_date is not null and end_date is not null));
+  check (
+    not exclusive
+    or (start_date is not null and end_date is not null)
+    or (start_ts is not null and end_ts is not null)
+  );
 
 alter table public.bookings drop constraint if exists bookings_amounts_positive;
 alter table public.bookings

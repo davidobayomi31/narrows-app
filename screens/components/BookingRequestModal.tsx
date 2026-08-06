@@ -4,7 +4,8 @@ import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/dat
 import { Colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
 import { friendlyError } from '../../lib/errors';
-import { formatDateYMD } from '../../lib/dateFormat';
+import { formatDateYMD, formatTimeOfDay, timeToHHMM } from '../../lib/dateFormat';
+import { verifyAddress, VerifiedAddress } from '../../lib/geocode';
 import { sendPush } from '../../lib/sendPush';
 import { pickAndUploadBookingDocument } from '../../lib/uploadBookingDocument';
 import { BOOKING_TYPES, ListingType, typeLabel } from '../../lib/bookingTypes';
@@ -40,7 +41,12 @@ const POWER_OPTIONS = ['30A', '50A', 'None'];
 const HAUL_OUT_PURPOSES = ['Repair', 'Inspection', 'Bottom cleaning', 'Other'];
 
 const STEP_TITLES: Record<ListingType, string[]> = {
-  slip: ['Boat Info', 'Power & Needs', 'Insurance', 'Season Dates', 'Emergency Contact', 'Review'],
+  // Split from a single tall "Boat Info" step — it had 7 field groups
+  // (listing picker + boat type + name + length + beam + draft + height +
+  // registration) which could grow tall enough to push the footer off the
+  // sheet on smaller layouts. The other listing types' Boat Info step stays
+  // single-page since they have far fewer fields.
+  slip: ['Boat Basics', 'Boat Dimensions', 'Power & Needs', 'Insurance', 'Season Dates', 'Emergency Contact', 'Review'],
   day_slip: ['Boat Info', 'Dates & Power', 'Contact', 'Review'],
   storage: ['Boat Info', 'Storage Details', 'Emergency Contact', 'Review'],
   haul_out: ['Boat Info', 'Service Date', 'Emergency Contact', 'Review'],
@@ -49,6 +55,10 @@ const STEP_TITLES: Record<ListingType, string[]> = {
   rental: [],
   fuel: [],
 };
+
+function minutesOfDay(d: Date): number {
+  return d.getHours() * 60 + d.getMinutes();
+}
 
 function priceLabel(l: Listing): string | null {
   if (l.price_cents == null) return null;
@@ -85,6 +95,13 @@ export default function BookingRequestModal({
   const [powerRequirement, setPowerRequirement] = useState<string | null>(null);
   const [waterHookup, setWaterHookup] = useState<boolean | null>(null);
 
+  // Day_slip arrival/departure time-of-day. Stored separately from
+  // startDate/endDate since those stay plain `date` columns for the booking
+  // availability exclusion constraint (see marina_bookings.sql). Only the
+  // time-of-day portion of these Date values is used.
+  const [arrivalTime, setArrivalTime] = useState<Date | null>(null);
+  const [departureTime, setDepartureTime] = useState<Date | null>(null);
+
   // Slip insurance
   const [insurer, setInsurer] = useState('');
   const [policyNumber, setPolicyNumber] = useState('');
@@ -96,6 +113,15 @@ export default function BookingRequestModal({
   // Storage
   const [trailerYN, setTrailerYN] = useState<boolean | null>(null);
   const [shrinkWrapAddOn, setShrinkWrapAddOn] = useState<boolean | null>(null);
+  // Where the boat is coming from — same pattern as WinterizeRequestModal:
+  // already at the marina, owner drops it off, or the marina needs to pick
+  // it up (address gets geocode-verified like every other address in the app).
+  const [alreadyAtMarina, setAlreadyAtMarina] = useState<boolean | null>(null);
+  const [needsPickup, setNeedsPickup] = useState<boolean | null>(null);
+  const [pickupAddress, setPickupAddress] = useState('');
+  const [verifiedPickupAddress, setVerifiedPickupAddress] = useState<VerifiedAddress | null>(null);
+  const [verifyingPickupAddress, setVerifyingPickupAddress] = useState(false);
+  const [pickupAddressError, setPickupAddressError] = useState<string | null>(null);
 
   // Haul-out
   const [approxWeight, setApproxWeight] = useState('');
@@ -105,7 +131,7 @@ export default function BookingRequestModal({
   // haul_out uses only startDate as its single service date.
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
-  const [datePicker, setDatePicker] = useState<'start' | 'end' | 'expiry' | null>(null);
+  const [datePicker, setDatePicker] = useState<'start' | 'end' | 'expiry' | 'arrivalTime' | 'departureTime' | null>(null);
 
   const [emergencyContactName, setEmergencyContactName] = useState('');
   const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
@@ -150,12 +176,16 @@ export default function BookingRequestModal({
   const listingChosen = listings.length === 0 ? false : selectedListing != null;
 
   // per-type, per-step validity
+  function boatBasicsValid(): boolean {
+    return listingChosen && boatType != null && boatName.trim().length > 0;
+  }
+  function boatDimensionsValid(): boolean {
+    return fitsListing && hasValidLength && hasValidBeam && hasValidDraft && hasValidHeight &&
+      registrationNumber.trim().length > 0;
+  }
   function boatInfoValid(): boolean {
     if (!listingChosen || !fitsListing) return false;
     switch (listingType) {
-      case 'slip':
-        return boatType != null && boatName.trim().length > 0 && hasValidLength && hasValidBeam &&
-          hasValidDraft && hasValidHeight && registrationNumber.trim().length > 0;
       case 'day_slip':
         return boatType != null && hasValidLength && hasValidBeam && hasValidDraft;
       case 'storage':
@@ -173,19 +203,21 @@ export default function BookingRequestModal({
   function stepValid(): boolean {
     if (listingType === 'slip') {
       switch (step) {
-        case 0: return boatInfoValid();
-        case 1: return powerRequirement != null && waterHookup != null;
-        case 2: return insurer.trim().length > 0 && policyNumber.trim().length > 0 &&
+        case 0: return boatBasicsValid();
+        case 1: return boatDimensionsValid();
+        case 2: return powerRequirement != null && waterHookup != null;
+        case 3: return insurer.trim().length > 0 && policyNumber.trim().length > 0 &&
           hasValidLiability && policyExpiry != null && insurancePhotoPath != null;
-        case 3: return datesRangeValid;
-        case 4: return contactValid;
-        case 5: return true;
+        case 4: return datesRangeValid;
+        case 5: return contactValid;
+        case 6: return true;
       }
     }
     if (listingType === 'day_slip') {
       switch (step) {
         case 0: return boatInfoValid();
-        case 1: return datesRangeValid && powerRequirement != null;
+        case 1: return startDate != null && arrivalTime != null && departureTime != null &&
+          minutesOfDay(departureTime) > minutesOfDay(arrivalTime) && powerRequirement != null;
         case 2: return contactValid;
         case 3: return true;
       }
@@ -193,7 +225,9 @@ export default function BookingRequestModal({
     if (listingType === 'storage') {
       switch (step) {
         case 0: return boatInfoValid();
-        case 1: return startDate != null && endDate != null && endDate.getTime() > startDate.getTime() && shrinkWrapAddOn != null;
+        case 1: return startDate != null && endDate != null && endDate.getTime() > startDate.getTime() && shrinkWrapAddOn != null &&
+          alreadyAtMarina != null &&
+          (alreadyAtMarina === true || (needsPickup === false || (needsPickup === true && verifiedPickupAddress != null)));
         case 2: return contactValid;
         case 3: return true;
       }
@@ -234,6 +268,8 @@ export default function BookingRequestModal({
     setRegistrationNumber('');
     setPowerRequirement(null);
     setWaterHookup(null);
+    setArrivalTime(null);
+    setDepartureTime(null);
     setInsurer('');
     setPolicyNumber('');
     setLiabilityAmount('');
@@ -241,6 +277,12 @@ export default function BookingRequestModal({
     setInsurancePhotoPath(null);
     setTrailerYN(null);
     setShrinkWrapAddOn(null);
+    setAlreadyAtMarina(null);
+    setNeedsPickup(null);
+    setPickupAddress('');
+    setVerifiedPickupAddress(null);
+    setVerifyingPickupAddress(false);
+    setPickupAddressError(null);
     setApproxWeight('');
     setHaulOutPurpose(null);
     setStartDate(null);
@@ -276,16 +318,47 @@ export default function BookingRequestModal({
     if (path) setInsurancePhotoPath(path);
   }
 
+  function onPickupAddressChange(text: string) {
+    setPickupAddress(text);
+    setVerifiedPickupAddress(null);
+    setPickupAddressError(null);
+  }
+
+  async function handleVerifyPickupAddress() {
+    if (verifyingPickupAddress || !pickupAddress.trim()) return;
+    setVerifyingPickupAddress(true);
+    setPickupAddressError(null);
+    const result = await verifyAddress(pickupAddress);
+    setVerifyingPickupAddress(false);
+    if (!result) {
+      setPickupAddressError("Couldn't find that address — check the street number and try again.");
+      return;
+    }
+    setVerifiedPickupAddress(result);
+  }
+
   function onDateChange(event: DateTimePickerEvent, date?: Date) {
     if (Platform.OS === 'android') setDatePicker(null);
     if (event.type === 'dismissed' || !date) return;
     if (datePicker === 'start') {
       setStartDate(date);
-      if (endDate && endDate.getTime() <= date.getTime()) setEndDate(null);
+      // A day slip is a single-day booking — departure is the same calendar
+      // day as arrival (the exclusion-constraint end_date is stored as +1
+      // day so it satisfies the DB's end_date > start_date check; the user
+      // never sees or picks a separate departure date, only times).
+      if (listingType === 'day_slip') {
+        setEndDate(new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1));
+      } else if (endDate && endDate.getTime() <= date.getTime()) {
+        setEndDate(null);
+      }
     } else if (datePicker === 'end') {
       setEndDate(date);
     } else if (datePicker === 'expiry') {
       setPolicyExpiry(date);
+    } else if (datePicker === 'arrivalTime') {
+      setArrivalTime(date);
+    } else if (datePicker === 'departureTime') {
+      setDepartureTime(date);
     }
   }
 
@@ -317,9 +390,25 @@ export default function BookingRequestModal({
         insurance_document_path: insurancePhotoPath,
       });
     } else if (listingType === 'day_slip') {
-      Object.assign(details, { power_requirement: powerRequirement });
+      Object.assign(details, {
+        power_requirement: powerRequirement,
+        arrival_time: arrivalTime ? timeToHHMM(arrivalTime) : null,
+        departure_time: departureTime ? timeToHHMM(departureTime) : null,
+      });
     } else if (listingType === 'storage') {
-      Object.assign(details, { trailer: trailerYN, shrink_wrap: shrinkWrapAddOn });
+      const boatLocation = alreadyAtMarina ? 'at_marina' : needsPickup ? 'needs_tow' : 'needs_drop_off';
+      Object.assign(details, {
+        trailer: trailerYN,
+        shrink_wrap: shrinkWrapAddOn,
+        boat_location: boatLocation,
+        ...(boatLocation === 'needs_tow' && verifiedPickupAddress
+          ? {
+              tow_address: verifiedPickupAddress.formatted,
+              tow_address_lat: verifiedPickupAddress.latitude,
+              tow_address_lng: verifiedPickupAddress.longitude,
+            }
+          : {}),
+      });
     } else if (listingType === 'haul_out') {
       Object.assign(details, { approx_weight_lbs: parsedWeight, purpose: haulOutPurpose });
     }
@@ -461,6 +550,75 @@ export default function BookingRequestModal({
     </>
   );
 
+  // Slip only — split out of boatInfoBlock (see STEP_TITLES comment) into a
+  // "who/what" step and a "dimensions" step so neither is tall enough to
+  // push the wizard footer off-screen.
+  const slipBoatBasicsBlock = (
+    <>
+      {listings.length === 0 && (
+        <Text style={styles.empty}>This marina has no {typeLabel(listingType).toLowerCase()} listings right now.</Text>
+      )}
+      {listings.length > 1 && (
+        <>
+          <Text style={styles.label}>Which {typeLabel(listingType).toLowerCase()}?</Text>
+          {listings.map((l) => {
+            const active = selectedListing?.id === l.id;
+            const price = priceLabel(l);
+            return (
+              <TouchableOpacity
+                key={l.id}
+                style={[styles.listingRow, active && styles.listingRowActive]}
+                onPress={() => setSelectedListing(l)}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.listingName, active && styles.listingNameActive]}>{l.name}</Text>
+                  <Text style={styles.listingMeta}>
+                    {[l.max_length_ft != null ? `up to ${l.max_length_ft} ft` : null, l.power].filter(Boolean).join(' · ') || ' '}
+                  </Text>
+                </View>
+                {price && <Text style={[styles.listingPrice, active && styles.listingNameActive]}>{price}</Text>}
+              </TouchableOpacity>
+            );
+          })}
+        </>
+      )}
+
+      <Text style={styles.label}>Boat type</Text>
+      <View style={styles.chipRow}>
+        {BOAT_TYPES.map((t) => (
+          <TouchableOpacity key={t} style={[styles.chip, boatType === t && styles.chipActive]} onPress={() => setBoatType(t)}>
+            <Text style={[styles.chipText, boatType === t && styles.chipTextActive]}>{t}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <Text style={styles.label}>Boat name</Text>
+      <TextInput style={styles.input} placeholder="e.g. Second Wind" placeholderTextColor={Colors.muted} value={boatName} onChangeText={setBoatName} />
+    </>
+  );
+
+  const slipBoatDimensionsBlock = (
+    <>
+      <Text style={styles.label}>Length overall (ft)</Text>
+      <TextInput style={styles.input} placeholder="e.g. 28" placeholderTextColor={Colors.muted} keyboardType="decimal-pad" value={lengthFt} onChangeText={setLengthFt} />
+      {!fitsListing && (
+        <Text style={styles.errorText}>This slip fits boats up to {selectedListing?.max_length_ft} ft.</Text>
+      )}
+
+      <Text style={styles.label}>Beam / width (ft)</Text>
+      <TextInput style={styles.input} placeholder="e.g. 9.5" placeholderTextColor={Colors.muted} keyboardType="decimal-pad" value={beamFt} onChangeText={setBeamFt} />
+
+      <Text style={styles.label}>Draft (ft)</Text>
+      <TextInput style={styles.input} placeholder="e.g. 3.5" placeholderTextColor={Colors.muted} keyboardType="decimal-pad" value={draftFt} onChangeText={setDraftFt} />
+
+      <Text style={styles.label}>Height / air draft (ft)</Text>
+      <TextInput style={styles.input} placeholder="e.g. 10" placeholderTextColor={Colors.muted} keyboardType="decimal-pad" value={heightFt} onChangeText={setHeightFt} />
+
+      <Text style={styles.label}>Boat registration / hull ID number</Text>
+      <TextInput style={styles.input} placeholder="e.g. ON1234AB" placeholderTextColor={Colors.muted} value={registrationNumber} onChangeText={setRegistrationNumber} />
+    </>
+  );
+
   const contactBlock = (
     <>
       <Text style={styles.label}>Emergency contact name</Text>
@@ -472,13 +630,29 @@ export default function BookingRequestModal({
     </>
   );
 
+  const datePickerMode: 'date' | 'time' =
+    datePicker === 'arrivalTime' || datePicker === 'departureTime' ? 'time' : 'date';
+
+  const datePickerValue =
+    datePicker === 'start' ? startDate
+    : datePicker === 'end' ? endDate
+    : datePicker === 'expiry' ? policyExpiry
+    : datePicker === 'arrivalTime' ? arrivalTime
+    : datePicker === 'departureTime' ? departureTime
+    : null;
+
   const datePickerBlock = datePicker != null && (
     <View style={styles.datePickerWrap}>
       <DateTimePicker
-        value={(datePicker === 'start' ? startDate : datePicker === 'end' ? endDate : policyExpiry) ?? new Date()}
-        mode="date"
-        minimumDate={datePicker === 'end' && startDate ? new Date(startDate.getTime() + 86400000) : new Date()}
-        display={Platform.OS === 'ios' ? 'inline' : 'default'}
+        key={datePicker}
+        value={datePickerValue ?? new Date()}
+        mode={datePickerMode}
+        minimumDate={
+          datePickerMode === 'date'
+            ? (datePicker === 'end' && startDate ? new Date(startDate.getTime() + 86400000) : new Date())
+            : undefined
+        }
+        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
         onChange={onDateChange}
         themeVariant="dark"
       />
@@ -505,11 +679,19 @@ export default function BookingRequestModal({
   }
   if (listingType === 'storage') {
     reviewRows.push({ label: 'Trailer / shrink-wrap', value: `${trailerYN ? 'Yes' : 'No'} / ${shrinkWrapAddOn ? 'Yes' : 'No'}` });
+    reviewRows.push({
+      label: 'Boat location',
+      value: alreadyAtMarina ? 'Already at this marina' : needsPickup ? `Needs pickup — ${verifiedPickupAddress?.formatted}` : 'Owner will drop off',
+    });
   }
   if (listingType === 'haul_out') {
     reviewRows.push({ label: 'Weight / purpose', value: `${approxWeight} lbs — ${haulOutPurpose}` });
   }
-  if (startDate) {
+  if (startDate && listingType === 'day_slip') {
+    const arrival = arrivalTime != null ? formatTimeOfDay(arrivalTime) : '—';
+    const departure = departureTime != null ? formatTimeOfDay(departureTime) : '—';
+    reviewRows.push({ label: 'Date', value: `${formatDateYMD(startDate)} — ${arrival} to ${departure}` });
+  } else if (startDate) {
     reviewRows.push({ label: listingType === 'haul_out' ? 'Service date' : 'Dates', value: `${formatDateYMD(startDate)}${endDate ? ` → ${formatDateYMD(endDate)}` : ''}` });
   }
   reviewRows.push({ label: 'Emergency contact', value: `${emergencyContactName} — ${emergencyContactPhone}` });
@@ -528,9 +710,16 @@ export default function BookingRequestModal({
       submitting={saving}
       submitLabel="Send Request"
     >
-      {step === 0 && boatInfoBlock}
+      {listingType === 'slip' ? (
+        <>
+          {step === 0 && slipBoatBasicsBlock}
+          {step === 1 && slipBoatDimensionsBlock}
+        </>
+      ) : (
+        step === 0 && boatInfoBlock
+      )}
 
-      {listingType === 'slip' && step === 1 && (
+      {listingType === 'slip' && step === 2 && (
         <>
           <Text style={styles.label}>Power requirement</Text>
           <View style={styles.chipRow}>
@@ -552,7 +741,7 @@ export default function BookingRequestModal({
         </>
       )}
 
-      {listingType === 'slip' && step === 2 && (
+      {listingType === 'slip' && step === 3 && (
         <>
           <Text style={styles.label}>Insurance company</Text>
           <TextInput style={styles.input} placeholder="e.g. Intact Insurance" placeholderTextColor={Colors.muted} value={insurer} onChangeText={setInsurer} />
@@ -578,7 +767,7 @@ export default function BookingRequestModal({
         </>
       )}
 
-      {listingType === 'slip' && step === 3 && (
+      {listingType === 'slip' && step === 4 && (
         <>
           <Text style={styles.label}>Season start</Text>
           <TouchableOpacity style={styles.input} onPress={() => setDatePicker('start')}>
@@ -592,19 +781,31 @@ export default function BookingRequestModal({
         </>
       )}
 
-      {listingType === 'slip' && step === 4 && contactBlock}
+      {listingType === 'slip' && step === 5 && contactBlock}
 
       {listingType === 'day_slip' && step === 1 && (
         <>
-          <Text style={styles.label}>Arrival</Text>
+          <Text style={styles.label}>Date</Text>
           <TouchableOpacity style={styles.input} onPress={() => setDatePicker('start')}>
             <Text style={{ color: startDate ? Colors.cream : Colors.muted, fontSize: 15 }}>{startDate ? formatDateYMD(startDate) : 'Select a date'}</Text>
           </TouchableOpacity>
-          <Text style={styles.label}>Departure</Text>
-          <TouchableOpacity style={styles.input} onPress={() => setDatePicker('end')}>
-            <Text style={{ color: endDate ? Colors.cream : Colors.muted, fontSize: 15 }}>{endDate ? formatDateYMD(endDate) : 'Select a date'}</Text>
-          </TouchableOpacity>
-          {(datePicker === 'start' || datePicker === 'end') && datePickerBlock}
+
+          <View style={styles.dateTimeRow}>
+            <View style={styles.dateTimeField}>
+              <Text style={styles.label}>Arrival time</Text>
+              <TouchableOpacity style={styles.input} onPress={() => setDatePicker('arrivalTime')}>
+                <Text style={{ color: arrivalTime ? Colors.cream : Colors.muted, fontSize: 15 }}>{arrivalTime ? formatTimeOfDay(arrivalTime) : 'Select a time'}</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.dateTimeField}>
+              <Text style={styles.label}>Departure time</Text>
+              <TouchableOpacity style={styles.input} onPress={() => setDatePicker('departureTime')}>
+                <Text style={{ color: departureTime ? Colors.cream : Colors.muted, fontSize: 15 }}>{departureTime ? formatTimeOfDay(departureTime) : 'Select a time'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {datePickerBlock}
           <Text style={styles.label}>Power requirement</Text>
           <View style={styles.chipRow}>
             {POWER_OPTIONS.map((p) => (
@@ -637,6 +838,70 @@ export default function BookingRequestModal({
               <Text style={[styles.chipText, shrinkWrapAddOn === false && styles.chipTextActive]}>No</Text>
             </TouchableOpacity>
           </View>
+
+          <Text style={styles.label}>Is your boat already at this marina?</Text>
+          <View style={styles.chipRow}>
+            <TouchableOpacity
+              style={[styles.chip, alreadyAtMarina === true && styles.chipActive]}
+              onPress={() => { setAlreadyAtMarina(true); setNeedsPickup(null); }}
+            >
+              <Text style={[styles.chipText, alreadyAtMarina === true && styles.chipTextActive]}>Yes, it's here</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.chip, alreadyAtMarina === false && styles.chipActive]}
+              onPress={() => setAlreadyAtMarina(false)}
+            >
+              <Text style={[styles.chipText, alreadyAtMarina === false && styles.chipTextActive]}>No</Text>
+            </TouchableOpacity>
+          </View>
+
+          {alreadyAtMarina === false && (
+            <>
+              <Text style={styles.label}>How will it get there?</Text>
+              <View style={styles.chipRow}>
+                <TouchableOpacity
+                  style={[styles.chip, needsPickup === false && styles.chipActive]}
+                  onPress={() => setNeedsPickup(false)}
+                >
+                  <Text style={[styles.chipText, needsPickup === false && styles.chipTextActive]}>I'll bring it myself</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.chip, needsPickup === true && styles.chipActive]}
+                  onPress={() => setNeedsPickup(true)}
+                >
+                  <Text style={[styles.chipText, needsPickup === true && styles.chipTextActive]}>I need pickup</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+
+          {needsPickup === true && (
+            <>
+              <Text style={styles.label}>Pickup address</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Street address, city"
+                placeholderTextColor={Colors.muted}
+                value={pickupAddress}
+                onChangeText={onPickupAddressChange}
+                onSubmitEditing={handleVerifyPickupAddress}
+              />
+              {verifiedPickupAddress ? (
+                <Text style={styles.addressVerified}>✓ {verifiedPickupAddress.formatted}</Text>
+              ) : (
+                <>
+                  <TouchableOpacity
+                    style={[styles.verifyButton, (!pickupAddress.trim() || verifyingPickupAddress) && styles.disabled]}
+                    onPress={handleVerifyPickupAddress}
+                    disabled={!pickupAddress.trim() || verifyingPickupAddress}
+                  >
+                    <Text style={styles.verifyButtonText}>{verifyingPickupAddress ? 'Checking…' : 'Verify address'}</Text>
+                  </TouchableOpacity>
+                  {pickupAddressError && <Text style={styles.errorText}>{pickupAddressError}</Text>}
+                </>
+              )}
+            </>
+          )}
         </>
       )}
       {listingType === 'storage' && step === 2 && contactBlock}
@@ -702,12 +967,15 @@ const styles = StyleSheet.create({
   chipTextActive: { color: Colors.black, fontWeight: '700' },
 
   input: { backgroundColor: Colors.surface, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, color: Colors.cream, fontSize: 15 },
+  dateTimeRow: { flexDirection: 'row', gap: 8 },
+  dateTimeField: { flex: 1 },
   notesInput: { minHeight: 70, textAlignVertical: 'top' },
   errorText: { color: '#FF6B6B', fontSize: 12, marginTop: 8, lineHeight: 16 },
   addressVerified: { color: '#4CAF50', fontSize: 13, marginTop: 4 },
 
   verifyButton: { backgroundColor: Colors.surface, borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginTop: 4, borderWidth: 1, borderColor: '#333333' },
   verifyButtonText: { color: Colors.cream, fontSize: 13, fontWeight: '600' },
+  disabled: { opacity: 0.4 },
 
   datePickerWrap: { alignItems: 'center', marginTop: 8 },
   datePickerDone: { alignSelf: 'stretch', backgroundColor: Colors.gold, borderRadius: 12, paddingVertical: 12, alignItems: 'center', marginTop: 8 },

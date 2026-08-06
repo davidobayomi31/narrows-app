@@ -4,9 +4,56 @@
 > that was paused mid-way. Read this before touching any of `marina/`
 > (in the **narrows-landing** repo) or the booking/marina screens in narrows-app.
 >
-> Last updated: 2026-08-03. Two repos involved: `narrows-app` (this one) and
+> Last updated: 2026-08-03 (post-QA-pause update — Ace is now confirmed fully working
+> end-to-end, see below). Two repos involved: `narrows-app` (this one) and
 > `narrows-landing` at `/Users/davidobayomi/Desktop/Narrows/narrows-landing` — **a separate
 > git repo**, not a subfolder of this one. Don't confuse the two when running git commands.
+
+## ✅ Ace is fully live — confirmed working end-to-end
+
+`ANTHROPIC_API_KEY` is set on the Supabase project and **`ace-summarize` was tested directly
+via curl and returned a real, correct summary** — not just "the secret exists," an actual
+successful Claude API round trip:
+
+```
+curl -X POST "https://pddfyikqpuuuzgqhwjgu.supabase.co/functions/v1/ace-summarize" \
+  -H "apikey: <anon key>" -H "Authorization: Bearer <anon key>" \
+  -d '{"marina_name":"Blue Beacon Marina","location":"693 Atherley Road, Orillia, ON L3V 1P4", ...}'
+→ 200 {"summary":"Blue Beacon Marina is a family-run marina on Atherley Road in Orillia...",
+       "suggested_amenities":["Bait Shop","Free Parking"]}
+```
+
+It correctly pulled "Bait Shop" and "Free Parking" out of free-text notes as *suggested*
+amenities (not auto-added to the picked list) — exactly the intended behavior.
+
+**Two real problems hit and fixed while getting here, worth knowing about:**
+1. The first `supabase secrets set ANTHROPIC_API_KEY=...` David ran resulted in a `401
+   invalid x-api-key` — the pasted value was bad somehow (extra whitespace/quote, dropped
+   character — never root-caused precisely, just re-copied and re-ran the command and it
+   fixed itself). **If this key ever needs to be rotated, re-set, and the app suddenly gets
+   401s from Anthropic, redo `supabase secrets set` carefully — paste with no surrounding
+   quotes.**
+2. After the key started authenticating, the next error was `400 "Your credit balance is
+   too low"` — David had clicked "Skip for now" on the credit-purchase screen when first
+   creating the key, so Evaluation access alone wasn't enough for real API calls. Fixed by
+   buying US$5 of credits on platform.claude.com (Anthropic Console) → Billing. **The
+   console's billing modal itself was buggy** — "Buy credits" stayed inert/unclickable for
+   several attempts even with a seemingly-complete form; a mismatched "Postal code" vs
+   "Confirm postal code" was one real cause, but even after fixing that it still didn't work
+   until reloading the page and redoing the form fresh in one pass. If this ever needs
+   redoing (e.g. credits run low and need topping up), expect that same flakiness and try a
+   full page reload if the buy button won't respond.
+
+Temporary debug logging that was added to `ace-summarize/index.ts` to diagnose the above
+(`debug`/`stack` fields on the error response) has been **reverted and redeployed** — the
+function is back to its clean, production error-handling state. Nothing left uncommitted
+from this.
+
+**Only remaining loose end from Phase C:** none functionally — Ace is done. The web portal
+itself (`marina/apply.html` end-to-end through a real magic-link email) still hasn't been
+clicked through in an actual browser by anyone (see the QA section below) — the
+`ace-summarize` function itself is proven, but the full apply→email→confirm human flow
+around it isn't yet.
 
 ---
 
@@ -73,12 +120,10 @@ call to write a profile summary + suggest amenity tags from free text.
 - App change: `screens/MarinaProfileScreen.tsx` now renders `marina.description` (the
   Ace-written summary, once a marina is approved) below the amenity tags.
 
-**⚠️ BLOCKED: no `ANTHROPIC_API_KEY` secret is set on the Supabase project.** Ace's summary
-step will fail (gracefully — the applicant can still submit without one) until this runs:
-```bash
-supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
-```
-No redeploy needed after — the already-deployed `ace-summarize` function picks it up live.
+**✅ `ANTHROPIC_API_KEY` is set and confirmed working** — see the "Ace is fully live" section
+at the top of this doc for the full story (two real bugs hit along the way, both resolved).
+If the summary step ever starts failing again, that top section documents both known
+failure modes (bad key value, low credit balance) and how they were diagnosed/fixed.
 
 ### Real bugs found and fixed during the portal build (not pre-existing, introduced/caught same session)
 - `marina_apply_drafts` had **no table-level GRANT** for `anon`/`authenticated` — RLS

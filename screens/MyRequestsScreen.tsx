@@ -4,9 +4,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
-import WinterizationRequestCard from './components/WinterizationRequestCard';
+import BookingRequestCard from './components/BookingRequestCard';
 
-export default function MyWinterizationRequestsScreen() {
+export default function MyRequestsScreen() {
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -50,7 +50,7 @@ export default function MyWinterizationRequestsScreen() {
         )}
 
         {requests.map((r) => (
-          <WinterizationRequestCard
+          <BookingRequestCard
             key={r.id}
             request={r}
             marinaName={r.marina?.name || 'Marina'}

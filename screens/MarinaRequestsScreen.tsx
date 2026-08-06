@@ -20,7 +20,7 @@ import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/dat
 import { Colors } from '../constants/colors';
 import { supabase } from '../lib/supabase';
 import { friendlyError } from '../lib/errors';
-import { formatDateYMD, parseDateYMD } from '../lib/dateFormat';
+import { formatDateYMD, parseDateYMD, formatTimeHHMM } from '../lib/dateFormat';
 import { sendPush } from '../lib/sendPush';
 import { useAccount } from '../contexts/AccountContext';
 import { typeLabel } from '../lib/bookingTypes';
@@ -57,7 +57,7 @@ const STATUS_COLOR: Record<string, string> = {
 const LOCATION_LABEL: Record<string, string> = {
   at_marina: 'Already at this marina',
   needs_drop_off: 'Owner will drop off',
-  needs_tow: 'Needs a tow',
+  needs_tow: 'Needs pickup / tow',
 };
 
 function timeAgo(iso: string) {
@@ -340,7 +340,8 @@ export default function MarinaRequestsScreen() {
               {r.status === 'pending' && r.start_date && (
                 <Text style={styles.cardDetail}>
                   {r.marina_listings?.listing_type === 'winterization' ? 'Preferred: ' : ''}
-                  {r.start_date}{r.end_date ? ` → ${r.end_date}` : ''}
+                  {r.start_date}
+                  {r.marina_listings?.listing_type !== 'day_slip' && r.end_date ? ` → ${r.end_date}` : ''}
                 </Text>
               )}
               <Text style={styles.cardTime}>{timeAgo(r.created_at)}</Text>
@@ -459,6 +460,12 @@ export default function MarinaRequestsScreen() {
                           value={`${selected.details.trailer ? 'Yes' : 'No'} / ${selected.details?.shrink_wrap ? 'Yes' : 'No'}`}
                         />
                       )}
+                      {selected.details?.boat_location && (
+                        <DetailRow label="Location" value={LOCATION_LABEL[selected.details.boat_location] || selected.details.boat_location} />
+                      )}
+                      {selected.details?.tow_address && (
+                        <DetailRow label="Pickup address" value={selected.details.tow_address} />
+                      )}
                     </>
                   )}
                   {selected.marina_listings?.listing_type === 'haul_out' && selected.details?.approx_weight_lbs != null && (
@@ -489,7 +496,12 @@ export default function MarinaRequestsScreen() {
                         value={`${selected.details.emergency_contact_name} — ${selected.details.emergency_contact_phone || '—'}`}
                       />
                     )}
-                  {!selectedIsWinterization() && selected.start_date ? (
+                  {selected.marina_listings?.listing_type === 'day_slip' && selected.start_date ? (
+                    <DetailRow
+                      label="Date"
+                      value={`${selected.start_date}${selected.details?.arrival_time ? ` — ${formatTimeHHMM(selected.details.arrival_time)}` : ''}${selected.details?.departure_time ? ` to ${formatTimeHHMM(selected.details.departure_time)}` : ''}`}
+                    />
+                  ) : !selectedIsWinterization() && selected.start_date ? (
                     <DetailRow
                       label="Dates"
                       value={`${selected.start_date}${selected.end_date ? ` → ${selected.end_date}` : ''}`}

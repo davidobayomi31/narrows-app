@@ -5,12 +5,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useStripe } from '@stripe/stripe-react-native';
 import { Colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
-import { friendlyError } from '../../lib/errors';
-import { formatDateYMD } from '../../lib/dateFormat';
+import { friendlyError, edgeFunctionErrorMessage } from '../../lib/errors';
+import { formatDateYMD, formatHour } from '../../lib/dateFormat';
 import { sendPush } from '../../lib/sendPush';
 import { pickAndUploadBookingDocument } from '../../lib/uploadBookingDocument';
 import { randomUUID } from '../../lib/uuid';
 import WizardModal from './WizardModal';
+import DobCalendar from './DobCalendar';
 
 // Watercraft rental — the ONE instant-book flow in the app. Unlike every
 // other wizard (which submits a request the marina reviews), this one:
@@ -45,12 +46,6 @@ function calculateAge(dob: Date): number {
   return age;
 }
 
-function formatHour(h: number): string {
-  const period = h < 12 ? 'AM' : 'PM';
-  const h12 = h % 12 === 0 ? 12 : h % 12;
-  return `${h12}:00 ${period}`;
-}
-
 export default function RentalBookingModal({ visible, marinaId, marinaProfileId, onClose, onSubmitted }: Props) {
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const [step, setStep] = useState(0);
@@ -68,8 +63,24 @@ export default function RentalBookingModal({ visible, marinaId, marinaProfileId,
   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
 
   // Step 1 — Renter Info
-  const [dob, setDob] = useState<Date | null>(null);
-  const [showDobPicker, setShowDobPicker] = useState(false);
+  // DOB is a free-text YYYY-MM-DD field, not a native date picker.
+  // Reason: `@react-native-community/datetimepicker` on iOS 17+ with the New
+  // Architecture crashes hard in `UIDatePicker`/`UICalendarView` when the
+  // picked date is far from today (e.g. a 1990s DOB with maximumDate=now).
+  // A plain text input sidesteps the native picker entirely, and typing 8
+  // digits is faster than wheel-scrolling 26 years anyway.
+  const [dobText, setDobText] = useState('');
+  const [showDobCalendar, setShowDobCalendar] = useState(false);
+  const dob: Date | null = (() => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dobText.trim());
+    if (!m) return null;
+    const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
+    if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+    const parsed = new Date(y, mo - 1, d);
+    if (parsed.getFullYear() !== y || parsed.getMonth() !== mo - 1 || parsed.getDate() !== d) return null;
+    if (parsed.getTime() > Date.now()) return null;
+    return parsed;
+  })();
   // PCOC (Pleasure Craft Operator Card) — the actual legal requirement to
   // operate a powered watercraft in Canada, with no age exemption for PWCs
   // like a seadoo. A driver's license has no bearing on boating competency;
@@ -169,7 +180,8 @@ export default function RentalBookingModal({ visible, marinaId, marinaProfileId,
     setDuration(null);
     setAvailableListing(null);
     setAvailabilityError(null);
-    setDob(null);
+    setDobText('');
+    setShowDobCalendar(false);
     setPcocNumber('');
     setLicenseNumber('');
     setLicensePhotoPath(null);
@@ -210,11 +222,6 @@ export default function RentalBookingModal({ visible, marinaId, marinaProfileId,
   function onDateChange(event: DateTimePickerEvent, date?: Date) {
     if (Platform.OS === 'android') setShowDatePicker(false);
     if (event.type !== 'dismissed' && date) setRentalDate(date);
-  }
-
-  function onDobChange(event: DateTimePickerEvent, date?: Date) {
-    if (Platform.OS === 'android') setShowDobPicker(false);
-    if (event.type !== 'dismissed' && date) setDob(date);
   }
 
   async function submit() {
@@ -275,7 +282,7 @@ export default function RentalBookingModal({ visible, marinaId, marinaProfileId,
       const { data, error } = await supabase.functions.invoke('create-payment-intent', {
         body: { booking_id: bookingId },
       });
-      if (error || !data?.client_secret) throw new Error(error?.message || 'Could not start payment');
+      if (error || !data?.client_secret) throw new Error(await edgeFunctionErrorMessage(error, 'Could not start payment'));
 
       const { error: sheetError } = await initPaymentSheet({
         merchantDisplayName: 'Narrows',
@@ -348,6 +355,7 @@ export default function RentalBookingModal({ visible, marinaId, marinaProfileId,
           {showDatePicker && (
             <View style={styles.datePickerWrap}>
               <DateTimePicker
+                key="rental-date"
                 value={rentalDate ?? new Date()}
                 mode="date"
                 minimumDate={new Date()}
@@ -397,25 +405,16 @@ export default function RentalBookingModal({ visible, marinaId, marinaProfileId,
       {step === 1 && (
         <>
           <Text style={styles.label}>Date of birth</Text>
-          <TouchableOpacity style={styles.input} onPress={() => setShowDobPicker(true)}>
-            <Text style={{ color: dob ? Colors.cream : Colors.muted, fontSize: 15 }}>{dob ? formatDateYMD(dob) : 'Select a date'}</Text>
+          <TouchableOpacity style={styles.input} onPress={() => setShowDobCalendar((v) => !v)}>
+            <Text style={{ color: dob ? Colors.cream : Colors.muted, fontSize: 15 }}>
+              {dob ? formatDateYMD(dob) : 'Select a date'}
+            </Text>
           </TouchableOpacity>
-          {showDobPicker && (
-            <View style={styles.datePickerWrap}>
-              <DateTimePicker
-                value={dob ?? new Date(2000, 0, 1)}
-                mode="date"
-                maximumDate={new Date()}
-                display={Platform.OS === 'ios' ? 'inline' : 'default'}
-                onChange={onDobChange}
-                themeVariant="dark"
-              />
-              {Platform.OS === 'ios' && (
-                <TouchableOpacity style={styles.datePickerDone} onPress={() => setShowDobPicker(false)}>
-                  <Text style={styles.datePickerDoneText}>Done</Text>
-                </TouchableOpacity>
-              )}
-            </View>
+          {showDobCalendar && (
+            <DobCalendar
+              value={dob}
+              onChange={(d) => { setDobText(formatDateYMD(d)); setShowDobCalendar(false); }}
+            />
           )}
           {dob && age != null && age < MIN_AGE && (
             <Text style={styles.errorText}>Renters must be at least {MIN_AGE} years old.</Text>

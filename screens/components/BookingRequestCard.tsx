@@ -5,6 +5,7 @@ import { useStripe } from '@stripe/stripe-react-native';
 import { Colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
 import { typeLabel } from '../../lib/bookingTypes';
+import { edgeFunctionErrorMessage } from '../../lib/errors';
 
 const STEPS = [
   { key: 'pending', label: 'Requested' },
@@ -39,7 +40,7 @@ type Props = {
   onPaid?: () => void;
 };
 
-export default function WinterizationRequestCard({ request: r, marinaName, onPaid }: Props) {
+export default function BookingRequestCard({ request: r, marinaName, onPaid }: Props) {
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const [paying, setPaying] = useState(false);
 
@@ -53,7 +54,7 @@ export default function WinterizationRequestCard({ request: r, marinaName, onPai
         body: { booking_id: r.id },
       });
       if (error || !data?.client_secret) {
-        throw new Error(error?.message || 'Could not start payment');
+        throw new Error(await edgeFunctionErrorMessage(error, 'Could not start payment'));
       }
 
       const { error: sheetError } = await initPaymentSheet({

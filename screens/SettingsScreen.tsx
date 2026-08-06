@@ -1,10 +1,13 @@
+import { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Linking, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
-import { WINTERIZATION_REQUESTS_LIVE } from '../constants/features';
+import { BOOKING_REQUESTS_LIVE } from '../constants/features';
 import { supabase } from '../lib/supabase';
 import { useUnits } from '../contexts/UnitsContext';
+import { useAccount } from '../contexts/AccountContext';
+import { friendlyError } from '../lib/errors';
 import { PRIVACY_URL, TERMS_URL, COMMUNITY_GUIDELINES_URL } from '../constants/legal';
 
 // a small two-option segmented control used for the unit toggles
@@ -55,8 +58,38 @@ function Row({
   );
 }
 
+// A setup-checklist row — like Row, but for an outstanding onboarding step
+// rather than a settings destination. The amber dot mirrors the pending-review
+// banner styling used elsewhere so it reads as "needs attention" at a glance.
+function SetupRow({
+  icon,
+  label,
+  subtitle,
+  onPress,
+  busy,
+}: {
+  icon: any;
+  label: string;
+  subtitle: string;
+  onPress: () => void;
+  busy?: boolean;
+}) {
+  return (
+    <TouchableOpacity style={styles.row} onPress={onPress} disabled={busy}>
+      <View style={styles.setupDot} />
+      <Ionicons name={icon} size={20} color={Colors.cream} />
+      <View style={{ flex: 1 }}>
+        <Text style={styles.rowLabel}>{busy ? 'Working…' : label}</Text>
+        <Text style={styles.rowSubtitle}>{subtitle}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={Colors.muted} />
+    </TouchableOpacity>
+  );
+}
+
 export default function SettingsScreen() {
   const navigation = useNavigation<any>();
+  const { accountType, marina: ownedMarina } = useAccount();
   const {
     distanceUnit,
     timeUnit,
@@ -71,6 +104,49 @@ export default function SettingsScreen() {
     setShallowAlertEnabled,
     setShallowAlertDepthM,
   } = useUnits();
+
+  // Marina onboarding checklist — only outstanding steps are shown, and the
+  // whole section disappears once everything's done. Currently checks:
+  //  1. Stripe Connect (boaters can't pay a deposit without it — same check
+  //     Homepage.tsx's banner uses).
+  //  2. Listing prices — auto-provisioned listings start with a null price
+  //     ("contact for pricing"); a marina that never sets one can't actually
+  //     get booked for anything with a real cost.
+  const [connectingStripe, setConnectingStripe] = useState(false);
+  const [unpricedListings, setUnpricedListings] = useState(0);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (accountType !== 'marina' || !ownedMarina) return;
+      supabase
+        .from('marina_listings')
+        .select('id', { count: 'exact', head: true })
+        .eq('marina_id', ownedMarina.id)
+        .eq('active', true)
+        .is('price_cents', null)
+        .then(({ count }) => setUnpricedListings(count ?? 0));
+    }, [accountType, ownedMarina])
+  );
+
+  async function connectStripe() {
+    setConnectingStripe(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('create-connected-account');
+      if (error || !data?.url) {
+        throw new Error(error?.message || 'Could not start Stripe setup');
+      }
+      await Linking.openURL(data.url);
+    } catch (err) {
+      Alert.alert('Could not connect Stripe', friendlyError(err as Error));
+    } finally {
+      setConnectingStripe(false);
+    }
+  }
+
+  const setupStepsRemaining =
+    accountType === 'marina' && ownedMarina
+      ? (!ownedMarina.stripe_charges_enabled ? 1 : 0) + (unpricedListings > 0 ? 1 : 0)
+      : 0;
 
   // show the alert threshold in the user's chosen depth unit (ft with miles, m with km)
   const thresholdLabel =
@@ -148,14 +224,41 @@ export default function SettingsScreen() {
         <Row icon="person-outline" label="Edit Profile" onPress={() => navigation.navigate('EditProfile')} />
       </View>
 
-      {WINTERIZATION_REQUESTS_LIVE && (
+      {setupStepsRemaining > 0 && (
         <>
-          <Text style={styles.section}>WINTERIZATION</Text>
+          <Text style={styles.section}>FINISH SETTING UP</Text>
+          <View style={styles.group}>
+            {!ownedMarina!.stripe_charges_enabled && (
+              <SetupRow
+                icon="card-outline"
+                label="Connect with Stripe"
+                subtitle="Required before boaters can pay you a deposit."
+                onPress={connectStripe}
+                busy={connectingStripe}
+              />
+            )}
+            {unpricedListings > 0 && (
+              <SetupRow
+                icon="pricetag-outline"
+                label="Set your prices"
+                subtitle={`${unpricedListings} listing${unpricedListings === 1 ? '' : 's'} still show "contact for pricing." Set prices on narrows.site.`}
+                // No in-app price editor yet — that's the web portal's job
+                // (narrows-landing/marina/listings.html).
+                onPress={() => Linking.openURL('https://narrows.site/marina/listings.html')}
+              />
+            )}
+          </View>
+        </>
+      )}
+
+      {BOOKING_REQUESTS_LIVE && (
+        <>
+          <Text style={styles.section}>REQUESTS</Text>
           <View style={styles.group}>
             <Row
-              icon="snow-outline"
-              label="My Winterization Requests"
-              onPress={() => navigation.navigate('MyWinterizationRequests')}
+              icon="document-text-outline"
+              label="My Requests"
+              onPress={() => navigation.navigate('MyRequests')}
             />
           </View>
         </>
@@ -290,6 +393,8 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(255,255,255,0.06)',
   },
   rowLabel: { flex: 1, color: Colors.cream, fontSize: 16 },
+  rowSubtitle: { color: Colors.muted, fontSize: 12, marginTop: 2 },
+  setupDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.gold },
   unitRow: {
     flexDirection: 'row',
     alignItems: 'center',

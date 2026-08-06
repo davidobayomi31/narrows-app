@@ -19,7 +19,7 @@ import EditProfileScreen from './screens/EditProfileScreen';
 import EventsScreen from './screens/EventsScreen';
 import MarinaProfileScreen from './screens/MarinaProfileScreen';
 import MarinaServicesScreen from './screens/MarinaServicesScreen';
-import MyWinterizationRequestsScreen from './screens/MyWinterizationRequestsScreen';
+import MyRequestsScreen from './screens/MyRequestsScreen';
 import MarinaMessagesScreen from './screens/MarinaMessagesScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
 import PostDetailScreen from './screens/PostDetailScreen';
@@ -156,11 +156,11 @@ export default function App(){
         <Stack.Screen name='MarinaServices' component={MarinaServicesScreen} />
         <Stack.Screen name='MarinaMessages' component={MarinaMessagesScreen} />
         <Stack.Screen
-          name='MyWinterizationRequests'
-          component={MyWinterizationRequestsScreen}
+          name='MyRequests'
+          component={MyRequestsScreen}
           options={{
             headerShown: true,
-            title: 'Winterization Requests',
+            title: 'My Requests',
             headerStyle: { backgroundColor: Colors.background },
             headerTintColor: Colors.cream,
           }}

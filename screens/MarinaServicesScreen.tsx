@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
-import { WINTERIZATION_REQUESTS_LIVE } from '../constants/features';
+import { BOOKING_REQUESTS_LIVE } from '../constants/features';
 import { supabase } from '../lib/supabase';
 import WinterizeRequestModal from './components/WinterizeRequestModal';
 import BookingRequestModal from './components/BookingRequestModal';
@@ -94,7 +94,7 @@ export default function MarinaServicesScreen() {
 
   const tiles: ServiceTile[] = [];
 
-  if (WINTERIZATION_REQUESTS_LIVE && marina.winterization_enabled) {
+  if (BOOKING_REQUESTS_LIVE && marina.winterization_enabled) {
     tiles.push({
       key: 'winterization',
       label: BOOKING_TYPES.winterization.label,
@@ -103,7 +103,7 @@ export default function MarinaServicesScreen() {
       onPress: () => setShowWinterize(true),
     });
   }
-  if (WINTERIZATION_REQUESTS_LIVE && listingTypes.includes('rental')) {
+  if (BOOKING_REQUESTS_LIVE && listingTypes.includes('rental')) {
     tiles.push({
       key: 'rental',
       label: BOOKING_TYPES.rental.label,
@@ -112,7 +112,7 @@ export default function MarinaServicesScreen() {
       onPress: () => setShowRental(true),
     });
   }
-  if (WINTERIZATION_REQUESTS_LIVE) {
+  if (BOOKING_REQUESTS_LIVE) {
     (Object.keys(BOOKING_TYPES) as ListingType[])
       .filter((t) => BOOKING_TYPES[t].requestFlow && listingTypes.includes(t))
       .forEach((t) => {

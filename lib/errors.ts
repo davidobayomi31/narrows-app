@@ -40,3 +40,22 @@ export function friendlyError(error: MaybeError): string {
   // --- Fallback: never show the raw message ---
   return 'Something went wrong. Please try again.';
 }
+
+// `supabase.functions.invoke()` throws a generic `FunctionsHttpError` whose
+// `.message` is always the useless "Edge Function returned a non-2xx status
+// code" — the function's actual `{ error: "..." }` body lives on
+// `error.context`, the raw fetch Response, unread. Pull the real message out
+// of it so users see e.g. "This marina has not finished payment setup yet"
+// instead of the generic wrapper text.
+export async function edgeFunctionErrorMessage(error: unknown, fallback = 'Something went wrong. Please try again.'): Promise<string> {
+  const context = (error as { context?: unknown } | null)?.context;
+  if (context instanceof Response) {
+    try {
+      const body = await context.clone().json();
+      if (typeof body?.error === 'string') return body.error;
+    } catch {
+      // body wasn't JSON (or already read) — fall through to the generic message below.
+    }
+  }
+  return (error as { message?: string } | null)?.message || fallback;
+}

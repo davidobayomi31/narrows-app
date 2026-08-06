@@ -17,9 +17,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
-import { WINTERIZATION_REQUESTS_LIVE } from '../constants/features';
+import { BOOKING_REQUESTS_LIVE } from '../constants/features';
 import { supabase } from '../lib/supabase';
-import WinterizationRequestCard from './components/WinterizationRequestCard';
+import BookingRequestCard from './components/BookingRequestCard';
 import ChatModal from './components/ChatModal';
 import { BOOKING_TYPES, ListingType } from '../lib/bookingTypes';
 
@@ -107,7 +107,7 @@ export default function MarinaProfileScreen() {
       .eq('active', true);
     setListingTypes([...new Set((listingRows ?? []).map((l) => l.listing_type))]);
 
-    if (WINTERIZATION_REQUESTS_LIVE) {
+    if (BOOKING_REQUESTS_LIVE) {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         // every booking type now — the joined listing_type labels each card.
@@ -223,7 +223,7 @@ export default function MarinaProfileScreen() {
                 show if it hasn't listed any yet — so the entry point to
                 MarinaServicesScreen only appears when there's actually
                 something a boater (not the owner) could book. */}
-            {WINTERIZATION_REQUESTS_LIVE && !isOwnMarina && hasBookableServices && (
+            {BOOKING_REQUESTS_LIVE && !isOwnMarina && hasBookableServices && (
               <TouchableOpacity
                 style={styles.secondaryButton}
                 onPress={() => navigation.navigate('MarinaServices', { marinaId: marina.id })}
@@ -241,7 +241,7 @@ export default function MarinaProfileScreen() {
               Your Request{myRequests.length > 1 ? 's' : ''}
             </Text>
             {myRequests.map((r) => (
-              <WinterizationRequestCard key={r.id} request={r} onPaid={loadMarina} />
+              <BookingRequestCard key={r.id} request={r} onPaid={loadMarina} />
             ))}
           </View>
         )}

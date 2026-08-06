@@ -84,32 +84,38 @@ export default function WizardModal({
               contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 20) + 20 }]}
             >
               {children}
+
+              {/* Back/Continue live inside the scroll content, not a fixed
+                  footer — a pinned footer's bottom padding depends on
+                  safe-area insets that come back unreliable inside this
+                  Modal (buttons ended up flush against/under the home
+                  indicator on-device). Scrolling to the bottom always
+                  reveals them, on every device, with no inset math. */}
+              <View style={styles.footer}>
+                {!isFirstStep && (
+                  <TouchableOpacity style={styles.backButton} onPress={onBack} disabled={submitting}>
+                    <Ionicons name="chevron-back" size={18} color={Colors.cream} />
+                    <Text style={styles.backButtonText}>Back</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={[
+                    styles.continueButton,
+                    isFirstStep && styles.continueButtonFull,
+                    (!canContinue || submitting) && styles.continueButtonDisabled,
+                  ]}
+                  onPress={onContinue}
+                  disabled={!canContinue || submitting}
+                >
+                  {submitting ? (
+                    <ActivityIndicator color={Colors.background} />
+                  ) : (
+                    <Text style={styles.continueButtonText}>{isLastStep ? submitLabel : 'Continue'}</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </ScrollView>
           </DismissKeyboardView>
-
-          <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-            {!isFirstStep && (
-              <TouchableOpacity style={styles.backButton} onPress={onBack} disabled={submitting}>
-                <Ionicons name="chevron-back" size={18} color={Colors.cream} />
-                <Text style={styles.backButtonText}>Back</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={[
-                styles.continueButton,
-                isFirstStep && styles.continueButtonFull,
-                (!canContinue || submitting) && styles.continueButtonDisabled,
-              ]}
-              onPress={onContinue}
-              disabled={!canContinue || submitting}
-            >
-              {submitting ? (
-                <ActivityIndicator color={Colors.background} />
-              ) : (
-                <Text style={styles.continueButtonText}>{isLastStep ? submitLabel : 'Continue'}</Text>
-              )}
-            </TouchableOpacity>
-          </View>
         </KeyboardAvoidingView>
       </View>
     </Modal>
@@ -140,8 +146,8 @@ const styles = StyleSheet.create({
   footer: {
     flexDirection: 'row',
     gap: 12,
-    paddingHorizontal: 20,
-    paddingTop: 12,
+    marginTop: 24,
+    paddingTop: 16,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: '#2A2A2A',
   },
