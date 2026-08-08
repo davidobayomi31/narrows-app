@@ -99,10 +99,11 @@ Deno.serve(async (req) => {
       }
 
       // No matching booking isn't necessarily a bug (could be a stray
-      // PaymentIntent) — acknowledge so Stripe doesn't retry forever.
-      // Only 'approved' -> 'paid' exists today (create-payment-intent gates
-      // on it); a duplicate delivery for an already-'paid' booking is a
-      // no-op rather than re-stamping it.
+      // PaymentIntent, or one that belongs to a merch order instead — see
+      // below) — acknowledge so Stripe doesn't retry forever. Only
+      // 'approved' -> 'paid' exists today (create-payment-intent gates on
+      // it); a duplicate delivery for an already-'paid' booking is a no-op
+      // rather than re-stamping it.
       if (booking && booking.status === 'approved') {
         const { error: updateError } = await admin
           .from('bookings')
@@ -110,6 +111,41 @@ Deno.serve(async (req) => {
           .eq('id', booking.id);
         if (updateError) {
           return jsonResponse({ error: updateError.message }, 500);
+        }
+        break;
+      }
+
+      // Same PaymentIntent id space, different table — a merch order's
+      // create-merch-payment-intent stamps payment_intent_id onto
+      // merch_orders instead of bookings, so check there too before giving
+      // up. Also decrements stock_quantity (guarded so it can't go negative
+      // even under a race — scarcity enforced at the DB layer, same
+      // philosophy as bookings' overlap exclusion constraint).
+      const { data: order, error: orderFindError } = await admin
+        .from('merch_orders')
+        .select('id, product_id, quantity, status')
+        .eq('payment_intent_id', paymentIntent.id)
+        .maybeSingle();
+
+      if (orderFindError) {
+        return jsonResponse({ error: orderFindError.message }, 500);
+      }
+
+      if (order && order.status === 'pending_payment') {
+        const { error: updateOrderError } = await admin
+          .from('merch_orders')
+          .update({ status: 'paid', amount_paid_cents: paymentIntent.amount_received })
+          .eq('id', order.id);
+        if (updateOrderError) {
+          return jsonResponse({ error: updateOrderError.message }, 500);
+        }
+
+        const { error: stockError } = await admin.rpc('decrement_merch_stock', {
+          p_product_id: order.product_id,
+          p_quantity: order.quantity,
+        });
+        if (stockError) {
+          return jsonResponse({ error: stockError.message }, 500);
         }
       }
       break;

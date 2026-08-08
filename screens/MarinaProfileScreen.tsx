@@ -21,7 +21,9 @@ import { BOOKING_REQUESTS_LIVE } from '../constants/features';
 import { supabase } from '../lib/supabase';
 import BookingRequestCard from './components/BookingRequestCard';
 import ChatModal from './components/ChatModal';
+import MerchPurchaseModal, { MerchProduct } from './components/MerchPurchaseModal';
 import { BOOKING_TYPES, ListingType } from '../lib/bookingTypes';
+import { getHoursForDate, formatHoursRange } from '../lib/marinaHours';
 
 const MARINA_FALLBACK = 'https://images.unsplash.com/photo-1545671913-b89ac1b4ac10?w=1200&q=80';
 const HERO_OVERLAY = ['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.45)', 'rgba(0,0,0,0.92)'] as const;
@@ -48,6 +50,8 @@ export default function MarinaProfileScreen() {
   const [showChat, setShowChat] = useState(false);
   const [myUserId, setMyUserId] = useState<string | null>(null);
   const [unreadMessages, setUnreadMessages] = useState(0);
+  const [merchProducts, setMerchProducts] = useState<MerchProduct[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<MerchProduct | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -106,6 +110,14 @@ export default function MarinaProfileScreen() {
       .eq('marina_id', marinaId)
       .eq('active', true);
     setListingTypes([...new Set((listingRows ?? []).map((l) => l.listing_type))]);
+
+    const { data: merchData } = await supabase
+      .from('merch_products')
+      .select('*')
+      .eq('marina_id', marinaId)
+      .eq('active', true)
+      .order('created_at', { ascending: false });
+    setMerchProducts(merchData ?? []);
 
     if (BOOKING_REQUESTS_LIVE) {
       const { data: { user } } = await supabase.auth.getUser();
@@ -203,6 +215,15 @@ export default function MarinaProfileScreen() {
             {marina.lake && <Text style={styles.detail}>{marina.lake}</Text>}
             {marina.address && <Text style={styles.detail}>{marina.address}</Text>}
             {marina.phone && <Text style={styles.detail}>{marina.phone}</Text>}
+            {(() => {
+              const todayHours = getHoursForDate(marina.hours, new Date());
+              if (!todayHours) return <Text style={styles.detail}>Hours not posted</Text>;
+              return (
+                <Text style={styles.detail}>
+                  {todayHours.closed ? 'Closed today' : `Open today ${formatHoursRange(todayHours)}`}
+                </Text>
+              );
+            })()}
 
             <View style={styles.tagRow}>
               {(marina.amenities ?? []).map((tag: string) => (
@@ -242,6 +263,28 @@ export default function MarinaProfileScreen() {
             </Text>
             {myRequests.map((r) => (
               <BookingRequestCard key={r.id} request={r} onPaid={loadMarina} />
+            ))}
+          </View>
+        )}
+
+        {!isOwnMarina && merchProducts.length > 0 && (
+          <View style={styles.requestsSection}>
+            <Text style={styles.sectionTitle}>Shop</Text>
+            {merchProducts.map((p) => (
+              <TouchableOpacity key={p.id} style={styles.shopRow} onPress={() => setSelectedProduct(p)}>
+                {p.photos?.[0] ? (
+                  <Image source={{ uri: p.photos[0] }} style={styles.shopImage} />
+                ) : (
+                  <View style={[styles.shopImage, styles.shopImageFallback]}>
+                    <Ionicons name="pricetag" size={18} color={Colors.muted} />
+                  </View>
+                )}
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.shopName}>{p.name}</Text>
+                  <Text style={styles.shopPrice}>${(p.price_cents / 100).toFixed(2)}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={Colors.muted} />
+              </TouchableOpacity>
             ))}
           </View>
         )}
@@ -287,6 +330,15 @@ export default function MarinaProfileScreen() {
           onRead={loadUnreadMessages}
         />
       )}
+
+      <MerchPurchaseModal
+        visible={selectedProduct != null}
+        product={selectedProduct}
+        marinaId={marina.id}
+        marinaProfileId={marina.profile_id ?? null}
+        onClose={() => setSelectedProduct(null)}
+        onSubmitted={() => { setSelectedProduct(null); loadMarina(); }}
+      />
     </SafeAreaView>
   );
 }
@@ -383,6 +435,15 @@ const styles = StyleSheet.create({
   postsSection: { paddingHorizontal: 16, paddingTop: 20 },
   sectionTitle: { color: Colors.cream, fontSize: 16, fontWeight: '700', marginBottom: 16 },
   empty: { color: Colors.muted, fontSize: 14, textAlign: 'center', marginTop: 12 },
+
+  shopRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: Colors.surface,
+    borderRadius: 12, borderWidth: 1, borderColor: '#333333', padding: 12, marginBottom: 10,
+  },
+  shopImage: { width: 48, height: 48, borderRadius: 8, backgroundColor: Colors.surfaceAlt },
+  shopImageFallback: { alignItems: 'center', justifyContent: 'center' },
+  shopName: { color: Colors.cream, fontSize: 14, fontWeight: '600' },
+  shopPrice: { color: Colors.gold, fontSize: 13, fontWeight: '700', marginTop: 2 },
 
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   tile: { width: TILE, height: TILE, borderRadius: 12, overflow: 'hidden', backgroundColor: Colors.surface },

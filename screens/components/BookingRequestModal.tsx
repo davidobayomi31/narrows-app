@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase';
 import { friendlyError } from '../../lib/errors';
 import { formatDateYMD, formatTimeOfDay, timeToHHMM } from '../../lib/dateFormat';
 import { verifyAddress, VerifiedAddress } from '../../lib/geocode';
+import { MarinaHours, getHoursForDate, formatHoursRange, isWithinHours } from '../../lib/marinaHours';
 import { sendPush } from '../../lib/sendPush';
 import { pickAndUploadBookingDocument } from '../../lib/uploadBookingDocument';
 import { BOOKING_TYPES, ListingType, typeLabel } from '../../lib/bookingTypes';
@@ -31,6 +32,7 @@ type Props = {
   visible: boolean;
   marinaId: string;
   marinaProfileId: string | null;
+  marinaHours: MarinaHours | null;
   listingType: ListingType;
   onClose: () => void;
   onSubmitted: () => void;
@@ -68,7 +70,7 @@ function priceLabel(l: Listing): string | null {
 }
 
 export default function BookingRequestModal({
-  visible, marinaId, marinaProfileId, listingType, onClose, onSubmitted,
+  visible, marinaId, marinaProfileId, marinaHours, listingType, onClose, onSubmitted,
 }: Props) {
   const config = BOOKING_TYPES[listingType];
   const stepTitles = STEP_TITLES[listingType];
@@ -200,6 +202,12 @@ export default function BookingRequestModal({
   const contactValid = emergencyContactName.trim().length > 0 && emergencyContactPhone.trim().length > 0;
   const datesRangeValid = startDate != null && endDate != null && endDate.getTime() > startDate.getTime();
 
+  // Day-slip arrival/departure hours hint — soft, not enforced. A native
+  // time-mode spinner can't be cleanly bounded to a marina's open/close
+  // window across both platforms, so this is a hint + a non-blocking warning
+  // at "Continue" (see handleContinue) rather than a hard block.
+  const dayHours = listingType === 'day_slip' && startDate ? getHoursForDate(marinaHours, startDate) : null;
+
   function stepValid(): boolean {
     if (listingType === 'slip') {
       switch (step) {
@@ -304,6 +312,23 @@ export default function BookingRequestModal({
 
   function handleContinue() {
     if (!stepValid()) return;
+    if (listingType === 'day_slip' && step === 1 && dayHours && arrivalTime && departureTime &&
+        (!isWithinHours(dayHours, arrivalTime.getHours() * 60 + arrivalTime.getMinutes()) ||
+         !isWithinHours(dayHours, departureTime.getHours() * 60 + departureTime.getMinutes()))) {
+      Alert.alert(
+        'Outside marina hours',
+        `This marina is open ${formatHoursRange(dayHours)} that day. You can still send the request — the marina will confirm.`,
+        [
+          { text: 'Change time', style: 'cancel' },
+          { text: 'Send anyway', onPress: () => advanceStep() },
+        ]
+      );
+      return;
+    }
+    advanceStep();
+  }
+
+  function advanceStep() {
     if (step < stepTitles.length - 1) {
       setStep(step + 1);
     } else {
@@ -806,6 +831,12 @@ export default function BookingRequestModal({
           </View>
 
           {datePickerBlock}
+          {dayHours && !dayHours.closed && (
+            <Text style={styles.helperText}>This marina is open {formatHoursRange(dayHours)} that day.</Text>
+          )}
+          {dayHours?.closed && (
+            <Text style={styles.errorText}>This marina is closed that day — the marina may not be able to accommodate this request.</Text>
+          )}
           <Text style={styles.label}>Power requirement</Text>
           <View style={styles.chipRow}>
             {POWER_OPTIONS.map((p) => (
@@ -971,6 +1002,7 @@ const styles = StyleSheet.create({
   dateTimeField: { flex: 1 },
   notesInput: { minHeight: 70, textAlignVertical: 'top' },
   errorText: { color: '#FF6B6B', fontSize: 12, marginTop: 8, lineHeight: 16 },
+  helperText: { color: Colors.muted, fontSize: 12, marginTop: 8, lineHeight: 16 },
   addressVerified: { color: '#4CAF50', fontSize: 13, marginTop: 4 },
 
   verifyButton: { backgroundColor: Colors.surface, borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginTop: 4, borderWidth: 1, borderColor: '#333333' },

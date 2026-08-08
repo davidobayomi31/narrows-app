@@ -1,13 +1,92 @@
 # Narrows — Marina Booking Platform, Web Portal & Ace — Session Memory
 
-> Covers Phase B (marina web portal), Phase C (Ace AI onboarding), and an on-device QA pass
-> that was paused mid-way. Read this before touching any of `marina/`
-> (in the **narrows-landing** repo) or the booking/marina screens in narrows-app.
+> Covers Phase B (marina web portal), Phase C (Ace AI onboarding), an on-device QA pass
+> that was paused mid-way, and Phase D (Services/Hours/Merchandise, below). Read this
+> before touching any of `marina/` (in the **narrows-landing** repo) or the booking/marina
+> screens in narrows-app.
 >
-> Last updated: 2026-08-03 (post-QA-pause update — Ace is now confirmed fully working
-> end-to-end, see below). Two repos involved: `narrows-app` (this one) and
-> `narrows-landing` at `/Users/davidobayomi/Desktop/Narrows/narrows-landing` — **a separate
-> git repo**, not a subfolder of this one. Don't confuse the two when running git commands.
+> Last updated: 2026-08-08 (Phase D: Services + Hours + Merchandise + portal profile
+> completeness — code written, NOT yet deployed, see below). Two repos involved:
+> `narrows-app` (this one) and `narrows-landing` at
+> `/Users/davidobayomi/Desktop/Narrows/narrows-landing` — **a separate git repo**, not a
+> subfolder of this one. Don't confuse the two when running git commands.
+
+## ⚠️ Phase D — code written this session, NOT deployed yet
+
+Full plan at the time: `/Users/davidobayomi/.claude/plans/eager-mixing-pond.md`. Everything
+below is written and typechecks clean (`npx tsc --noEmit -p .` in narrows-app), but **none
+of it is live** — no SQL has been run against the real Supabase project, no new Edge
+Function has been deployed, and no portal page has been clicked through in a real browser.
+
+**SQL to run, in this order** (Supabase → SQL Editor, or `supabase db query --linked -f`):
+1. `supabase/marina_hours.sql` — adds `marinas.hours` jsonb.
+2. `supabase/service_suggestions.sql` — new table, RLS, grants.
+3. `supabase/marina_photos_bucket.sql` — new public bucket `marina-photos` + RLS.
+4. `supabase/merchandise.sql` — `merch_products`/`merch_orders` tables, the
+   `set_merch_order_from_product()` stamping trigger, the `decrement_merch_stock()` RPC,
+   RLS, grants (including the service_role grant — this table class has bitten this
+   project on that exact gotcha twice already, see stripe_connect.sql).
+5. `supabase/merch_photos_bucket.sql` — new public bucket `merch-photos` + RLS.
+
+**Edge Function to deploy:** `supabase functions deploy create-merch-payment-intent` — new
+function, mirrors `create-payment-intent` exactly (same secrets already set:
+`STRIPE_SECRET_KEY` etc., nothing new to configure).
+
+**Edge Function to redeploy** (existing function, code changed):
+`supabase functions deploy stripe-webhook` — its `payment_intent.succeeded` handler now
+also checks `merch_orders` (not just `bookings`) by `payment_intent_id`. **No new Stripe
+webhook destination needed** — same URL, same event, already subscribed.
+
+**What shipped (code, pending the above deploy):**
+- **Hours of operation** — `marinas.hours` jsonb (`{mon: {open,close,closed}, ...}`, null =
+  not set = no constraint). Portal: new `marina/hours.html`. App: `RentalBookingModal.tsx`
+  hard-filters its start-hour chips to the picked date's window (closed day → no chips +
+  message); `BookingRequestModal.tsx`'s day-slip arrival/departure spinner gets a soft hint
+  + a non-blocking "outside hours, send anyway?" warning (native time-spinner can't be
+  cleanly bounded cross-platform, so this is a deliberate soft constraint, not a bug).
+  `MarinaProfileScreen.tsx` shows today's hours. Shared helpers: `lib/marinaHours.ts`.
+- **Services catalog** — portal: new `marina/services.html`, an on/off toggle grid for the
+  8 fixed listing_types (turning one on inserts/reactivates a `marina_listings` row with
+  sensible defaults; the boater-facing `MarinaServicesScreen.tsx` already read purely from
+  active `marina_listings` rows, so this needed no app-side change) plus an "offer
+  something else?" free-text box that inserts into the new `service_suggestions` table.
+  **No admin review UI was built on purpose** — matches this project's existing convention
+  (marina applications are already reviewed by David via direct table access, not a UI);
+  review new suggestion rows via the Supabase table editor.
+- **Portal profile completeness** — `marina/profile.html` gained a Bio textarea
+  (`marinas.description`, previously only ever set once by Ace's onboarding summary, now
+  marina-editable going forward) and a photo uploader (`marina-photos` bucket →
+  `marinas.image_url`, which `MarinaProfileScreen.tsx`/`Homepage.tsx` already render but
+  nothing previously wrote to).
+- **Merchandise** — pickup-or-ship physical goods, buy-now (no cart), reusing the exact
+  Stripe Connect destination-charge pattern proven by rentals (0% platform fee, same as
+  bookings today). New tables `merch_products`/`merch_orders` (deliberately NOT folded into
+  `bookings`/`marina_listings` — those model a date/time-exclusive bookable unit with no
+  quantity concept). Portal: new `marina/merchandise.html` (Products tab: add/edit/photo
+  upload to `merch-photos`; Orders tab: filter by status, "Mark shipped"
+  optional-tracking-number / "Mark fulfilled" actions). App: new "Shop" section on
+  `MarinaProfileScreen.tsx` (only shown if the marina has ≥1 active product, hidden for the
+  marina's own account) → `screens/components/MerchPurchaseModal.tsx` (quantity stepper
+  capped at stock, shipping address + Nominatim verification only when
+  `fulfillment_type='ship'`, then the same `initPaymentSheet`/`presentPaymentSheet` flow
+  `RentalBookingModal.tsx` uses). Stock decrements only on confirmed payment (webhook-
+  driven, race-safe guarded UPDATE via `decrement_merch_stock()`), never on order creation
+  — unlike a rental hold, there's no exclusive resource to squat on, so an abandoned
+  unpaid order just sits at `pending_payment` with nothing to expire/sweep.
+
+**What's genuinely NOT done — pick up here:**
+- None of the 5 SQL files have been run against the live project.
+- `create-merch-payment-intent` hasn't been deployed; `stripe-webhook`'s updated code
+  hasn't been redeployed.
+- No portal page (hours/services/merchandise, or the profile.html additions) has been
+  clicked through in a real browser — same Claude-in-Chrome/localhost limitation noted
+  below in the existing QA section.
+- No end-to-end Stripe test-mode payment has been run for a merch order.
+- Two small pre-existing inconsistencies noticed but deliberately left alone (out of
+  scope for this pass): `MarinaOnboardingScreen.tsx`'s service chip list is missing
+  `mooring`/`fuel` (present in `listings.html`'s and the new `services.html`'s full
+  8-type list), and `marinas.water_alert` was deliberately not exposed in the portal —
+  looks admin/safety-only, left alone without confirming that assumption with David.
 
 ## ✅ Ace is fully live — confirmed working end-to-end
 

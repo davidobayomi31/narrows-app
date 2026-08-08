@@ -10,6 +10,7 @@ import { formatDateYMD, formatHour } from '../../lib/dateFormat';
 import { sendPush } from '../../lib/sendPush';
 import { pickAndUploadBookingDocument } from '../../lib/uploadBookingDocument';
 import { randomUUID } from '../../lib/uuid';
+import { MarinaHours, getHoursForDate, formatHoursRange, isWithinHours } from '../../lib/marinaHours';
 import WizardModal from './WizardModal';
 import DobCalendar from './DobCalendar';
 
@@ -34,6 +35,7 @@ type Props = {
   visible: boolean;
   marinaId: string;
   marinaProfileId: string | null;
+  marinaHours: MarinaHours | null;
   onClose: () => void;
   onSubmitted: () => void;
 };
@@ -46,7 +48,7 @@ function calculateAge(dob: Date): number {
   return age;
 }
 
-export default function RentalBookingModal({ visible, marinaId, marinaProfileId, onClose, onSubmitted }: Props) {
+export default function RentalBookingModal({ visible, marinaId, marinaProfileId, marinaHours, onClose, onSubmitted }: Props) {
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const [step, setStep] = useState(0);
   const [bookingId] = useState(() => randomUUID());
@@ -121,6 +123,20 @@ export default function RentalBookingModal({ visible, marinaId, marinaProfileId,
     if (!rentalDate || startHour == null || duration == null || listings.length === 0) return;
     checkAvailability();
   }, [rentalDate, startHour, duration, listings]);
+
+  // marina hours for the picked date — null means "not set, no constraint."
+  // A previously-picked start hour that falls outside a newly-picked date's
+  // window (or a day marked closed) gets cleared so a stale selection can't
+  // silently carry over.
+  const dayHours = rentalDate ? getHoursForDate(marinaHours, rentalDate) : null;
+  const availableStartHours = dayHours && !dayHours.closed
+    ? START_HOURS.filter((h) => isWithinHours(dayHours, h * 60))
+    : dayHours?.closed
+    ? []
+    : START_HOURS;
+  useEffect(() => {
+    if (startHour != null && !availableStartHours.includes(startHour)) setStartHour(null);
+  }, [rentalDate, marinaHours]);
 
   function computeWindow(): { start: Date; end: Date } | null {
     if (!rentalDate || startHour == null || duration == null) return null;
@@ -372,13 +388,22 @@ export default function RentalBookingModal({ visible, marinaId, marinaProfileId,
           )}
 
           <Text style={styles.label}>Start time</Text>
-          <View style={styles.chipRow}>
-            {START_HOURS.map((h) => (
-              <TouchableOpacity key={h} style={[styles.chip, startHour === h && styles.chipActive]} onPress={() => setStartHour(h)}>
-                <Text style={[styles.chipText, startHour === h && styles.chipTextActive]}>{formatHour(h)}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          {dayHours?.closed ? (
+            <Text style={styles.errorText}>This marina is closed that day — pick a different date.</Text>
+          ) : (
+            <>
+              <View style={styles.chipRow}>
+                {availableStartHours.map((h) => (
+                  <TouchableOpacity key={h} style={[styles.chip, startHour === h && styles.chipActive]} onPress={() => setStartHour(h)}>
+                    <Text style={[styles.chipText, startHour === h && styles.chipTextActive]}>{formatHour(h)}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {dayHours && (
+                <Text style={styles.helperText}>This marina is open {formatHoursRange(dayHours)} that day.</Text>
+              )}
+            </>
+          )}
 
           <Text style={styles.label}>Duration</Text>
           <View style={styles.chipRow}>

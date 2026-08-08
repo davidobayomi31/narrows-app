@@ -167,6 +167,7 @@ export default function MarinaServicesScreen() {
           visible={bookingType != null}
           marinaId={marina.id}
           marinaProfileId={marina.profile_id ?? null}
+          marinaHours={marina.hours ?? null}
           listingType={bookingType}
           onClose={() => setBookingType(null)}
           onSubmitted={closeAndReturn}
@@ -177,6 +178,7 @@ export default function MarinaServicesScreen() {
         visible={showRental}
         marinaId={marina.id}
         marinaProfileId={marina.profile_id ?? null}
+        marinaHours={marina.hours ?? null}
         onClose={() => setShowRental(false)}
         onSubmitted={closeAndReturn}
       />
